@@ -9,6 +9,7 @@ import { RoundEvaluation } from './RoundEvaluation'
 import { FinalResults } from './FinalResults'
 import { generateRandomTopic } from '@/lib/topic-generator'
 import { evaluatePrompt } from '@/lib/prompt-evaluator'
+import { createClient } from '@/lib/supabase/client'
 import type { RoundData, GameStage } from '@/lib/game-types'
 
 export function GameFlow() {
@@ -19,6 +20,25 @@ export function GameFlow() {
   const [currentTopic, setCurrentTopic] = useState('')
 
 
+
+  // Save result to Supabase
+  const saveToSupabase = async (roundData: RoundData, roundNumber: number) => {
+    try {
+      const supabase = createClient()
+      await supabase.from('game_results').insert({
+        phone_number: phoneNumber,
+        round: roundNumber,
+        topic: roundData.topic,
+        prompt: roundData.prompt,
+        total_score: roundData.totalScore,
+        idea_score: roundData.ideaScore,
+        prompt_score: roundData.promptScore,
+        feedback: roundData.feedback,
+      })
+    } catch (e) {
+      console.error('Failed to save to Supabase:', e)
+    }
+  }
 
   // Phone submit
   const handlePhoneSubmit = (phone: string) => {
@@ -63,9 +83,11 @@ export function GameFlow() {
 
       if (isRound1) {
         setRound1(roundData)
+        saveToSupabase(roundData, 1)
         setStage('evaluation-1')
       } else {
         setRound2(roundData)
+        saveToSupabase(roundData, 2)
         setStage('evaluation-2')
       }
     }, 2000)
