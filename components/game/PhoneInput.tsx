@@ -112,7 +112,7 @@ export function PhoneInput({ onSubmit }: PhoneInputProps) {
         </div>
 
         <p className="text-center text-violet-300/40 text-xs mt-6">
-          전화번호는 중복 참여 방지 용도로만 사용됩니다
+          전화번호는 상품 증정을 위한 용도로만 사용됩니다
         </p>
       </motion.div>
     </div>

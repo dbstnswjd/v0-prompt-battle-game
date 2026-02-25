@@ -377,6 +377,15 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
                 </motion.p>
               )}
 
+              <a
+                href="https://forms.gle/Wcu1rHhVazCjmu8N9"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                재밌었다면 dwnc go!go!
+              </a>
+
               <button
                 onClick={onRestart}
                 className="w-full py-4 bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-violet-200 font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
