@@ -155,7 +155,7 @@ function evaluateIdea(prompt: string, topic: string): { total: number; details: 
   let trendAlignment = 55;
   
   // Creativity evaluation
-  const creativityKeywords = ['새로운', '창의적', '독특한', '혁신적', '차별화', '감성', '경험', '��토리'];
+  const creativityKeywords = ['새로운', '창의적', '독특한', '혁신적', '차별화', '감성', '경험', '스토리'];
   const creativityCount = creativityKeywords.filter(kw => prompt.includes(kw)).length;
   creativity += creativityCount * 8;
   
@@ -251,7 +251,7 @@ function evaluateIdea(prompt: string, topic: string): { total: number; details: 
   if (productivityKeywords.some(kw => prompt.includes(kw))) trendAlignment += 10;
   
   // Mental health & Wellness
-  const wellnessKeywords = ['멘탈', '정신건강', '웰빙', '명상', '���링', '케어', '건강'];
+  const wellnessKeywords = ['멘탈', '정신건강', '웰빙', '명상', '힐링', '케어', '건강'];
   if (wellnessKeywords.some(kw => prompt.includes(kw))) trendAlignment += 9;
   
   // MZ generation keywords
