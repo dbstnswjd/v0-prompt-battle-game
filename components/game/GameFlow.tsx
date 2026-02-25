@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { PhoneInput } from './PhoneInput'
 import { TopicGeneration } from './TopicGeneration'
 import { PromptWriting } from './PromptWriting'
@@ -19,46 +19,60 @@ export function GameFlow() {
   const [round2, setRound2] = useState<RoundData | null>(null)
   const [currentTopic, setCurrentTopic] = useState('')
 
-
-
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  // Use ref to avoid stale closure issues in setTimeout callbacks
+  const sessionIdRef = useRef<string | null>(null)
+  const phoneRef = useRef<string>('')
 
   // Create a game session in Supabase when user enters phone number
-  const createSession = async (phone: string) => {
+  const createSession = async (phone: string): Promise<string | null> => {
     try {
       const supabase = createClient()
+      console.log('[v0] Creating session for phone:', phone)
+
       const { data, error } = await supabase
         .from('game_sessions')
         .insert({ phone_number: phone })
         .select('session_id')
         .single()
 
+      console.log('[v0] Create session result:', { data, error })
+
       if (error) {
         console.error('[v0] Failed to create session:', error)
-        return
+        return null
       }
       if (data) {
-        setSessionId(data.session_id)
+        sessionIdRef.current = data.session_id
+        console.log('[v0] Session created, session_id:', data.session_id)
+        return data.session_id
       }
+      return null
     } catch (e) {
       console.error('[v0] Failed to create session:', e)
+      return null
     }
   }
 
   // Save round score to Supabase
   const saveToSupabase = async (roundData: RoundData, roundNumber: number) => {
-    if (!sessionId) {
+    const currentSessionId = sessionIdRef.current
+    const currentPhone = phoneRef.current
+    console.log('[v0] saveToSupabase called:', { currentSessionId, currentPhone, roundNumber, score: roundData.totalScore })
+
+    if (!currentSessionId) {
       console.error('[v0] No session_id available, skipping save')
       return
     }
     try {
       const supabase = createClient()
-      const { error } = await supabase.from('game_scores').insert({
-        session_id: sessionId,
-        phone_number: phoneNumber,
+      const { data, error } = await supabase.from('game_scores').insert({
+        session_id: currentSessionId,
+        phone_number: currentPhone,
         round_number: roundNumber,
         score: roundData.totalScore,
-      })
+      }).select()
+
+      console.log('[v0] Save score result:', { data, error })
 
       if (error) {
         console.error('[v0] Failed to save score:', error)
@@ -69,9 +83,10 @@ export function GameFlow() {
   }
 
   // Phone submit
-  const handlePhoneSubmit = (phone: string) => {
+  const handlePhoneSubmit = async (phone: string) => {
     setPhoneNumber(phone)
-    createSession(phone)
+    phoneRef.current = phone
+    await createSession(phone)
     setStage('topic-1')
   }
 
@@ -131,7 +146,8 @@ export function GameFlow() {
   const handleRestart = () => {
     setStage('phone')
     setPhoneNumber('')
-    setSessionId(null)
+    sessionIdRef.current = null
+    phoneRef.current = ''
     setRound1(null)
     setRound2(null)
     setCurrentTopic('')
