@@ -21,24 +21,48 @@ export function GameFlow() {
 
 
 
-  // Save result to Supabase
-  const saveToSupabase = async (roundData: RoundData, roundNumber: number) => {
-    console.log('[v0] saveToSupabase called', { phoneNumber, roundNumber })
-    console.log('[v0] SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-    console.log('[v0] ANON_KEY exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+  const [sessionId, setSessionId] = useState<string | null>(null)
+
+  // Create a game session in Supabase when user enters phone number
+  const createSession = async (phone: string) => {
     try {
       const supabase = createClient()
-      const { data, error } = await supabase.from('game_results').insert({
+      const { data, error } = await supabase
+        .from('game_sessions')
+        .insert({ phone_number: phone })
+        .select('session_id')
+        .single()
+
+      if (error) {
+        console.error('[v0] Failed to create session:', error)
+        return
+      }
+      if (data) {
+        setSessionId(data.session_id)
+      }
+    } catch (e) {
+      console.error('[v0] Failed to create session:', e)
+    }
+  }
+
+  // Save round score to Supabase
+  const saveToSupabase = async (roundData: RoundData, roundNumber: number) => {
+    if (!sessionId) {
+      console.error('[v0] No session_id available, skipping save')
+      return
+    }
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.from('game_scores').insert({
+        session_id: sessionId,
         phone_number: phoneNumber,
-        round: roundNumber,
-        topic: roundData.topic,
-        prompt: roundData.prompt,
-        total_score: roundData.totalScore,
-        idea_score: roundData.ideaScore,
-        prompt_score: roundData.promptScore,
-        feedback: roundData.feedback,
-      }).select()
-      console.log('[v0] Supabase insert result:', { data, error })
+        round_number: roundNumber,
+        score: roundData.totalScore,
+      })
+
+      if (error) {
+        console.error('[v0] Failed to save score:', error)
+      }
     } catch (e) {
       console.error('[v0] Failed to save to Supabase:', e)
     }
@@ -46,8 +70,8 @@ export function GameFlow() {
 
   // Phone submit
   const handlePhoneSubmit = (phone: string) => {
-    console.log('[v0] Phone submitted:', phone)
     setPhoneNumber(phone)
+    createSession(phone)
     setStage('topic-1')
   }
 
@@ -65,7 +89,6 @@ export function GameFlow() {
 
   // Submit prompt -> evaluate locally
   const handlePromptSubmit = (prompt: string) => {
-    console.log('[v0] Prompt submitted:', prompt.substring(0, 50))
     const isRound1 = stage === 'writing-1'
     setStage(isRound1 ? 'evaluating-1' : 'evaluating-2')
 
@@ -108,6 +131,7 @@ export function GameFlow() {
   const handleRestart = () => {
     setStage('phone')
     setPhoneNumber('')
+    setSessionId(null)
     setRound1(null)
     setRound2(null)
     setCurrentTopic('')
