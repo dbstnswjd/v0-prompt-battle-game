@@ -36,14 +36,6 @@ export function PhoneInput({ onSubmit }: PhoneInputProps) {
       return
     }
 
-    const storageKey = `promptBattle_rounds_${digits}`
-    const roundsPlayed = parseInt(localStorage.getItem(storageKey) || '0', 10)
-
-    if (roundsPlayed >= 2) {
-      setError('이미 2라운드를 완료했습니다. 다시 참가할 수 없습니다.')
-      return
-    }
-
     onSubmit(digits)
   }
 
@@ -78,7 +70,7 @@ export function PhoneInput({ onSubmit }: PhoneInputProps) {
             AI가 당신의 프롬프트를 평가합니다
           </p>
           <p className="text-violet-300/50 text-sm mt-2">
-            단 2번의 기회, 냉정한 AI 심사위원
+            냉정한 AI 심사위원이 기다립니다
           </p>
         </div>
 

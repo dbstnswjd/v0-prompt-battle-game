@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { PhoneInput } from './PhoneInput'
 import { TopicGeneration } from './TopicGeneration'
 import { PromptWriting } from './PromptWriting'
@@ -18,11 +18,7 @@ export function GameFlow() {
   const [round2, setRound2] = useState<RoundData | null>(null)
   const [currentTopic, setCurrentTopic] = useState('')
 
-  const incrementRoundCount = useCallback((phone: string) => {
-    const key = `promptBattle_rounds_${phone}`
-    const current = parseInt(localStorage.getItem(key) || '0', 10)
-    localStorage.setItem(key, String(current + 1))
-  }, [])
+
 
   // Phone submit
   const handlePhoneSubmit = (phone: string) => {
@@ -67,11 +63,9 @@ export function GameFlow() {
 
       if (isRound1) {
         setRound1(roundData)
-        incrementRoundCount(phoneNumber)
         setStage('evaluation-1')
       } else {
         setRound2(roundData)
-        incrementRoundCount(phoneNumber)
         setStage('evaluation-2')
       }
     }, 2000)
