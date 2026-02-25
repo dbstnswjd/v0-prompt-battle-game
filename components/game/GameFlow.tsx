@@ -23,9 +23,12 @@ export function GameFlow() {
 
   // Save result to Supabase
   const saveToSupabase = async (roundData: RoundData, roundNumber: number) => {
+    console.log('[v0] saveToSupabase called', { phoneNumber, roundNumber })
+    console.log('[v0] SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+    console.log('[v0] ANON_KEY exists:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
     try {
       const supabase = createClient()
-      await supabase.from('game_results').insert({
+      const { data, error } = await supabase.from('game_results').insert({
         phone_number: phoneNumber,
         round: roundNumber,
         topic: roundData.topic,
@@ -34,9 +37,10 @@ export function GameFlow() {
         idea_score: roundData.ideaScore,
         prompt_score: roundData.promptScore,
         feedback: roundData.feedback,
-      })
+      }).select()
+      console.log('[v0] Supabase insert result:', { data, error })
     } catch (e) {
-      console.error('Failed to save to Supabase:', e)
+      console.error('[v0] Failed to save to Supabase:', e)
     }
   }
 
