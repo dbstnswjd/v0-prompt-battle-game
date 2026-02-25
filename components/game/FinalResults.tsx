@@ -38,6 +38,22 @@ function ScoreBar({ label, score }: { label: string; score: number }) {
   )
 }
 
+const SHARE_LABEL = '\uacb0\uacfc \uacf5\uc720\ud558\uae30'
+
+function ShareButton({ onClick }: { onClick: () => void }) {
+  return (
+    <motion.button
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      className="w-full py-4 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+    >
+      <Share2 className="w-5 h-5" />
+      <span>{SHARE_LABEL}</span>
+    </motion.button>
+  )
+}
+
 export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
   const [animatedScore, setAnimatedScore] = useState(0)
   const [showDetails, setShowDetails] = useState(false)
@@ -349,15 +365,7 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
 
             {/* Action Buttons */}
             <div className="space-y-3 pt-2">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleShare}
-                className="w-full py-4 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                <Share2 className="w-5 h-5" />
-                <span>결과 공유하기</span>
-              </motion.button>
+              <ShareButton onClick={handleShare} />
 
               {shareMessage && (
                 <motion.p
