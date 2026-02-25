@@ -46,6 +46,7 @@ export function GameFlow() {
 
   // Phone submit
   const handlePhoneSubmit = (phone: string) => {
+    console.log('[v0] Phone submitted:', phone)
     setPhoneNumber(phone)
     setStage('topic-1')
   }
@@ -64,6 +65,7 @@ export function GameFlow() {
 
   // Submit prompt -> evaluate locally
   const handlePromptSubmit = (prompt: string) => {
+    console.log('[v0] Prompt submitted:', prompt.substring(0, 50))
     const isRound1 = stage === 'writing-1'
     setStage(isRound1 ? 'evaluating-1' : 'evaluating-2')
 
