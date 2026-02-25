@@ -383,7 +383,7 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
                 rel="noopener noreferrer"
                 className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
               >
-                dwnc 지원하기
+                재밌었다면 dwnc go!go!
               </a>
 
               <button
