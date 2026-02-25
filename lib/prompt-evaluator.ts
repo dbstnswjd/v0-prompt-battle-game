@@ -251,7 +251,7 @@ function evaluateIdea(prompt: string, topic: string): { total: number; details: 
   if (productivityKeywords.some(kw => prompt.includes(kw))) trendAlignment += 10;
   
   // Mental health & Wellness
-  const wellnessKeywords = ['멘탈', '정신건강', '웰빙', '명상', '힐링', '케어', '건강'];
+  const wellnessKeywords = ['멘탈', '정신건강', '웰빙', '명상', '���링', '케어', '건강'];
   if (wellnessKeywords.some(kw => prompt.includes(kw))) trendAlignment += 9;
   
   // MZ generation keywords
@@ -543,43 +543,76 @@ function analyzeStrengthsWeaknesses(prompt: string, ideaEval: any, promptEval: a
 
 function generateFeedback(ideaScore: number, promptScore: number, prompt: string): string {
   const avgScore = (ideaScore + promptScore) / 2;
-  
-  // High performing
+  const parts: string[] = [];
+
+  // --- 1. Overall impression ---
   if (avgScore >= 80) {
-    const feedbacks = [
-      '아이디어와 프롬프트 모두 뛰어납니다. AI가 즉시 실행 가능한 수준입니다.',
-      '창의적이면서도 구체적인 프롬프트입니다. 실무에서도 충분히 활용 가능합니다.',
-      '문제 정의와 해결 방향이 명확합니다. 프롬프트 설계 능력이 탁월합니다.',
-    ];
-    return feedbacks[Math.floor(Math.random() * feedbacks.length)];
+    parts.push('전반적으로 매우 높은 수준의 프롬프트입니다.');
+  } else if (avgScore >= 65) {
+    parts.push('기본기가 갖춰진 프롬프트이나, 몇 가지 보완 포인트가 있습니다.');
+  } else if (avgScore >= 50) {
+    parts.push('핵심 아이디어는 잡았지만, 전달 방식에서 아쉬움이 남습니다.');
+  } else {
+    parts.push('프롬프트의 전반적인 방향과 구조 모두 재검토가 필요합니다.');
   }
-  
-  // Good but with room for improvement
-  if (avgScore >= 65) {
-    if (ideaScore > promptScore) {
-      return '아이디어는 신선하지만, 출력 요구 조건이 불명확해 AI 활용도가 낮아졌습니다.';
-    } else if (promptScore > ideaScore) {
-      return '프롬프트 구조는 좋으나, 아이디어의 독창성과 깊이를 더할 필요가 있습니다.';
+
+  // --- 2. Idea analysis ---
+  if (ideaScore >= 80) {
+    parts.push('아이디어 측면에서는 주제를 깊이 있게 해석하고 독창적인 시각을 보여주고 있습니다. 문제 정의부터 해결 방향까지 논리적으로 연결되어 있어 실제 서비스화했을 때도 경쟁력이 있을 것으로 보입니다.');
+  } else if (ideaScore >= 65) {
+    if (prompt.includes('문제') || prompt.includes('해결')) {
+      parts.push('문제 인식은 뚜렷하나, 해결 방안이 좀 더 구체적이면 좋겠습니다. 아이디어가 실제로 구현되었을 때 사용자가 어떤 가치를 느낄지에 대한 설명을 추가하면 설득력이 크게 올라갈 것입니다.');
     } else {
-      return '전반적으로 양호하나, 구체성과 창의성을 동시에 높이면 더 좋은 결과를 얻을 수 있습니다.';
+      parts.push('아이디어에 잠재력이 있지만, "왜 이것이 필요한가"에 대한 근거가 부족합니다. 대상 사용자의 불편함이나 니즈를 먼저 정의하고, 그것을 어떻게 해결하는지 흐름을 잡아보세요.');
+    }
+  } else if (ideaScore >= 50) {
+    parts.push('아이디어가 다소 일반적인 수준에 머물고 있습니다. 비슷한 서비스나 솔루션이 이미 존재하는지 차별점은 무엇인지 고민해보세요. "기존에 없는 가치"를 한 줄로 설명할 수 있다면 좋은 아이디어의 첫걸음입니다.');
+  } else {
+    parts.push('아이디어가 주제와의 연결성이 약하거나, 추상적인 단어 나열에 그치고 있습니다. 주제의 핵심 키워드를 다시 읽고, "누구에게", "어떤 상황에서", "무슨 문제를" 해결하는지 구체적으로 써보세요.');
+  }
+
+  // --- 3. Prompt structure analysis ---
+  if (promptScore >= 80) {
+    parts.push('프롬프트 구조도 우수합니다. AI에게 역할을 부여하고, 단계별로 지시하며, 출력 형식까지 명시한 점이 인상적입니다. 이 수준이면 실제 GPT에 입력해도 바로 양질의 결과를 기대할 수 있습니다.');
+  } else if (promptScore >= 65) {
+    const hasRole = prompt.includes('역할') || prompt.includes('당신은') || prompt.includes('전문가');
+    const hasFormat = prompt.includes('형식') || prompt.includes('포맷') || prompt.includes('목록') || prompt.includes('표');
+    if (!hasRole && !hasFormat) {
+      parts.push('프롬프트 구조에서 가장 아쉬운 점은 AI의 역할 설정과 출력 형식이 빠져있다는 것입니다. "당신은 ~분야 전문가입니다"로 시작하고, "~형식으로 정리해줘"라고 마무리하면 결과의 질이 크게 달라집니다.');
+    } else if (!hasRole) {
+      parts.push('출력 조건은 어느 정도 갖추었으나, AI에게 어떤 관점에서 답해야 하는지 역할을 부여하지 않았습니다. "당신은 ~입니다" 한 문장만 추가해도 AI의 답변 톤과 깊이가 완전히 달라집니다.');
+    } else if (!hasFormat) {
+      parts.push('역할 설정은 잘 되어있으나, AI가 어떤 형태로 결과물을 만들어야 하는지 불분명합니다. "표로 정리해줘", "3가지 옵션으로 제시해줘" 같은 출력 형식 지정을 추가해보세요.');
+    } else {
+      parts.push('프롬프트 작성 기술이 양호합니다. 다만 조건이나 제약사항을 추가하면 AI가 더 정확한 결과를 만들어낼 수 있습니다. 예를 들어 "~는 제외하고", "~를 반드시 포함해서" 같은 구체적 조건을 넣어보세요.');
+    }
+  } else if (promptScore >= 50) {
+    parts.push('프롬프트가 "~해줘"라는 단순 요청 수준에 가깝습니다. 좋은 프롬프트는 세 가지를 갖춰야 합니다: (1) AI의 역할/관점 설정, (2) 단계별 지시사항, (3) 원하는 출력의 형식과 조건. 이 세 가지를 의식하며 다시 작성해보세요.');
+  } else {
+    parts.push('프롬프트가 너무 짧거나 모호하여 AI가 의도를 파악하기 어렵습니다. 최소한 "누구(역할)"에게 "무엇(과제)"을 "어떻게(형식)" 해달라는 세 요소를 담아야 합니다. 한 줄짜리 질문보다는 맥락과 조건을 함께 제시해보세요.');
+  }
+
+  // --- 4. Specific actionable tip based on gap ---
+  const gap = Math.abs(ideaScore - promptScore);
+  if (gap >= 20) {
+    if (ideaScore > promptScore) {
+      parts.push('[Tip] 아이디어 감각은 뛰어나니, 프롬프트 엔지니어링 기법(역할 부여, 단계 분리, 출력 형식 지정)을 연습하면 점수가 크게 오를 수 있습니다.');
+    } else {
+      parts.push('[Tip] 프롬프트 작성 기술은 좋으니, 주제를 더 깊이 분석하고 차별화된 아이디어를 구상하는 데 시간을 투자해보세요.');
+    }
+  } else if (avgScore < 65) {
+    parts.push('[Tip] 다음 라운드에서는 프롬프트를 쓰기 전에 30초만 "이 주제의 핵심 문제가 뭘까?"를 먼저 생각해보세요. 그 한 문장이 전체 프롬프트의 방향을 잡아줍니다.');
+  } else if (avgScore >= 80) {
+    const hasExample = prompt.includes('예시') || prompt.includes('사례') || prompt.includes('예를 들어');
+    const hasNegative = prompt.includes('제외') || prompt.includes('피해') || prompt.includes('않도록');
+    if (!hasExample) {
+      parts.push('[Tip] 이미 훌륭하지만, 구체적인 예시("예를 들어 ~와 같은")를 1-2개 추가하면 AI가 의도를 더 정확히 파악합니다.');
+    } else if (!hasNegative) {
+      parts.push('[Tip] 거의 완벽에 가까운 프롬프트입니다. "~는 제외해줘"처럼 네거티브 조건을 추가하면 불필요한 결과를 사전에 걸러낼 수 있습니다.');
+    } else {
+      parts.push('[Tip] 매우 완성도 높은 프롬프트입니다. 마지막으로 "결과를 자기 검증하고 부족한 부분을 보완해줘"라는 메타 지시를 추가해보세요.');
     }
   }
-  
-  // Average
-  if (avgScore >= 50) {
-    const feedbacks = [
-      '기본적인 방향은 맞으나, 문제 정의와 해결 방법을 더 구체화해보세요.',
-      '프롬프트가 다소 추상적입니다. 역할, 형식, 조건을 명시하면 개선됩니다.',
-      '아디어를 실행 가능한 형태로 구체화하고, AI에게 명확한 지시를 내려보세요.',
-    ];
-    return feedbacks[Math.floor(Math.random() * feedbacks.length)];
-  }
-  
-  // Needs improvement
-  const feedbacks = [
-    '주제 해석과 프롬프트 설계 모두 개선이 필요합니다. 더 구체적으로 작성해보세요.',
-    '프롬프트가 너무 짧거나 모호합니다. 문제와 해결 방법을 명확히 서술하세요.',
-    'AI가 무엇을 해야 할지 불명확합니다. 역할, 목표, 출력 형식을 구체적으로 제시하세요.',
-  ];
-  return feedbacks[Math.floor(Math.random() * feedbacks.length)];
+
+  return parts.join(' ');
 }
