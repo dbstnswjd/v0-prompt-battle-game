@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Trophy, Share2, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, BarChart3 } from 'lucide-react'
+import { Trophy, Share2, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, BarChart3, Lightbulb, Wrench } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
@@ -13,6 +13,13 @@ interface FinalResultsProps {
 }
 
 function ScoreBar({ label, score }: { label: string; score: number }) {
+  const getBarColor = (s: number) => {
+    if (s >= 80) return 'from-emerald-500 to-emerald-400'
+    if (s >= 60) return 'from-violet-500 to-fuchsia-500'
+    if (s >= 40) return 'from-amber-500 to-orange-500'
+    return 'from-red-500 to-rose-500'
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-1.5">
@@ -24,7 +31,7 @@ function ScoreBar({ label, score }: { label: string; score: number }) {
           initial={{ width: 0 }}
           animate={{ width: `${score}%` }}
           transition={{ duration: 0.8 }}
-          className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full"
+          className={`h-full bg-gradient-to-r ${getBarColor(score)} rounded-full`}
         />
       </div>
     </div>
@@ -101,7 +108,7 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
   }, [])
 
   const handleShare = useCallback(async () => {
-    const text = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!\n주제: ${bestRound.topic}\n\n프롬프트는 감각이 아니라 설계다. 단 2번의 기회, AI가 판단한다.`
+    const text = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!\n아이디어: ${bestRound.ideaScore}점 | 프롬프트: ${bestRound.promptScore}점\n주제: ${bestRound.topic}\n\n프롬프트는 감각이 아니라 설계다. 단 2번의 기회, AI가 판단한다.`
 
     if (navigator.share) {
       try {
@@ -120,7 +127,7 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
       setShareMessage('복사에 실패했습니다.')
       setTimeout(() => setShareMessage(''), 2000)
     }
-  }, [finalScore, grade, bestRound.topic])
+  }, [finalScore, grade, bestRound.topic, bestRound.ideaScore, bestRound.promptScore])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
@@ -156,13 +163,24 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
               </span>
             </div>
           </div>
-          <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden">
+          <div className="w-full bg-white/10 rounded-full h-3 overflow-hidden mb-5">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${animatedScore}%` }}
               transition={{ duration: 1.2, ease: 'easeOut' }}
               className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
             />
+          </div>
+          <div className="flex justify-center gap-8">
+            <div className="text-center">
+              <p className="text-xs text-violet-300/50 mb-1">아이디어</p>
+              <p className="text-2xl font-bold text-white">{bestRound.ideaScore}</p>
+            </div>
+            <div className="w-px bg-white/10" />
+            <div className="text-center">
+              <p className="text-xs text-violet-300/50 mb-1">프롬프트</p>
+              <p className="text-2xl font-bold text-white">{bestRound.promptScore}</p>
+            </div>
           </div>
         </div>
 
@@ -172,15 +190,30 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            {/* Best Round Score Bars */}
+            {/* Idea Score Details */}
             <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
-              <h3 className="text-sm font-medium text-violet-300/70 mb-2">
-                {round2 ? '최고 점수 라운드 상세' : '점수 상세'}
-              </h3>
-              <ScoreBar label="창의성" score={bestRound.creativityScore} />
-              <ScoreBar label="실현 가능성" score={bestRound.feasibilityScore} />
-              <ScoreBar label="수익성" score={bestRound.profitabilityScore} />
-              <ScoreBar label="프롬프트 구조" score={bestRound.structureScore} />
+              <div className="flex items-center gap-2 mb-1">
+                <Lightbulb className="w-5 h-5 text-amber-400" />
+                <span className="font-semibold text-white">아이디어 평가</span>
+                <span className="ml-auto text-lg font-bold text-white">{bestRound.ideaScore}점</span>
+              </div>
+              <ScoreBar label="창의성" score={bestRound.ideaDetails.creativity} />
+              <ScoreBar label="실현 가능성" score={bestRound.ideaDetails.feasibility} />
+              <ScoreBar label="구체성" score={bestRound.ideaDetails.specificity} />
+              <ScoreBar label="시장성" score={bestRound.ideaDetails.marketability} />
+              <ScoreBar label="트렌드 적합도" score={bestRound.ideaDetails.trendAlignment} />
+            </div>
+
+            {/* Prompt Score Details */}
+            <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Wrench className="w-5 h-5 text-sky-400" />
+                <span className="font-semibold text-white">프롬프트 구조 평가</span>
+                <span className="ml-auto text-lg font-bold text-white">{bestRound.promptScore}점</span>
+              </div>
+              <ScoreBar label="역할 명확성" score={bestRound.promptDetails.roleClarity} />
+              <ScoreBar label="구조 품질" score={bestRound.promptDetails.structureQuality} />
+              <ScoreBar label="출력 명세" score={bestRound.promptDetails.outputSpecification} />
             </div>
 
             {/* AI Feedback */}
@@ -277,22 +310,14 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
                       </p>
                     </div>
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <div className="bg-white/[0.04] rounded-lg p-3 text-center">
-                      <p className="text-xs text-violet-300/50 mb-1">창의성</p>
-                      <p className="text-lg font-bold text-white">{displayedRound.creativityScore}</p>
+                      <p className="text-xs text-violet-300/50 mb-1">아이디어</p>
+                      <p className="text-lg font-bold text-white">{displayedRound.ideaScore}</p>
                     </div>
                     <div className="bg-white/[0.04] rounded-lg p-3 text-center">
-                      <p className="text-xs text-violet-300/50 mb-1">실현성</p>
-                      <p className="text-lg font-bold text-white">{displayedRound.feasibilityScore}</p>
-                    </div>
-                    <div className="bg-white/[0.04] rounded-lg p-3 text-center">
-                      <p className="text-xs text-violet-300/50 mb-1">수익성</p>
-                      <p className="text-lg font-bold text-white">{displayedRound.profitabilityScore}</p>
-                    </div>
-                    <div className="bg-white/[0.04] rounded-lg p-3 text-center">
-                      <p className="text-xs text-violet-300/50 mb-1">구조</p>
-                      <p className="text-lg font-bold text-white">{displayedRound.structureScore}</p>
+                      <p className="text-xs text-violet-300/50 mb-1">프롬프트</p>
+                      <p className="text-lg font-bold text-white">{displayedRound.promptScore}</p>
                     </div>
                   </div>
                 </div>

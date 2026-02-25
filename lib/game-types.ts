@@ -1,11 +1,21 @@
 export interface RoundData {
   topic: string
   prompt: string
+  ideaScore: number
+  promptScore: number
   totalScore: number
-  creativityScore: number
-  feasibilityScore: number
-  profitabilityScore: number
-  structureScore: number
+  ideaDetails: {
+    creativity: number
+    feasibility: number
+    specificity: number
+    marketability: number
+    trendAlignment: number
+  }
+  promptDetails: {
+    roleClarity: number
+    structureQuality: number
+    outputSpecification: number
+  }
   feedback: string
   strengths: string[]
   weaknesses: string[]

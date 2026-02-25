@@ -26,9 +26,9 @@ export function Evaluating() {
         </h2>
 
         <p className="text-violet-200/60 mb-8 leading-relaxed">
-          창의성, 실현 가능성, 수익성, 프롬프트 구조를 기반으로
+          아이디어의 창의성, 실현 가능성, 시장성과
           <br />
-          냉정하게 평가 중입니다...
+          프롬프트 구조를 냉정하게 평가 중입니다...
         </p>
 
         {/* Animated dots */}

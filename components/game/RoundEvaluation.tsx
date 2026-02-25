@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, ArrowRight, SkipForward, MessageSquare } from 'lucide-react'
+import { CheckCircle, XCircle, ArrowRight, SkipForward, MessageSquare, Lightbulb, Wrench } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
@@ -35,6 +35,13 @@ function ScoreBar({ label, score, delay }: { label: string; score: number; delay
     return () => clearTimeout(timer)
   }, [score, delay])
 
+  const getBarColor = (s: number) => {
+    if (s >= 80) return 'from-emerald-500 to-emerald-400'
+    if (s >= 60) return 'from-violet-500 to-fuchsia-500'
+    if (s >= 40) return 'from-amber-500 to-orange-500'
+    return 'from-red-500 to-rose-500'
+  }
+
   return (
     <div>
       <div className="flex justify-between items-center mb-1.5">
@@ -46,7 +53,7 @@ function ScoreBar({ label, score, delay }: { label: string; score: number; delay
           initial={{ width: 0 }}
           animate={{ width: `${animated}%` }}
           transition={{ duration: 0.8, delay: delay / 1000 }}
-          className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full"
+          className={`h-full bg-gradient-to-r ${getBarColor(score)} rounded-full`}
         />
       </div>
     </div>
@@ -124,6 +131,17 @@ export function RoundEvaluation({
               className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500"
             />
           </div>
+          <div className="flex justify-center gap-8 mt-4">
+            <div className="text-center">
+              <p className="text-xs text-violet-300/50 mb-1">아이디어</p>
+              <p className="text-2xl font-bold text-white">{roundData.ideaScore}</p>
+            </div>
+            <div className="w-px bg-white/10" />
+            <div className="text-center">
+              <p className="text-xs text-violet-300/50 mb-1">프롬프트</p>
+              <p className="text-2xl font-bold text-white">{roundData.promptScore}</p>
+            </div>
+          </div>
         </div>
 
         {showDetails && (
@@ -132,12 +150,30 @@ export function RoundEvaluation({
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            {/* 4 Score Bars */}
+            {/* Idea Score Details */}
             <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
-              <ScoreBar label="창의성" score={roundData.creativityScore} delay={0} />
-              <ScoreBar label="실현 가능성" score={roundData.feasibilityScore} delay={150} />
-              <ScoreBar label="수익성" score={roundData.profitabilityScore} delay={300} />
-              <ScoreBar label="프롬프트 구조" score={roundData.structureScore} delay={450} />
+              <div className="flex items-center gap-2 mb-1">
+                <Lightbulb className="w-5 h-5 text-amber-400" />
+                <span className="font-semibold text-white">아이디어 평가</span>
+                <span className="ml-auto text-lg font-bold text-white">{roundData.ideaScore}점</span>
+              </div>
+              <ScoreBar label="창의성" score={roundData.ideaDetails.creativity} delay={0} />
+              <ScoreBar label="실현 가능성" score={roundData.ideaDetails.feasibility} delay={100} />
+              <ScoreBar label="구체성" score={roundData.ideaDetails.specificity} delay={200} />
+              <ScoreBar label="시장성" score={roundData.ideaDetails.marketability} delay={300} />
+              <ScoreBar label="트렌드 적합도" score={roundData.ideaDetails.trendAlignment} delay={400} />
+            </div>
+
+            {/* Prompt Score Details */}
+            <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Wrench className="w-5 h-5 text-sky-400" />
+                <span className="font-semibold text-white">프롬프트 구조 평가</span>
+                <span className="ml-auto text-lg font-bold text-white">{roundData.promptScore}점</span>
+              </div>
+              <ScoreBar label="역할 명확성" score={roundData.promptDetails.roleClarity} delay={500} />
+              <ScoreBar label="구조 품질" score={roundData.promptDetails.structureQuality} delay={600} />
+              <ScoreBar label="출력 명세" score={roundData.promptDetails.outputSpecification} delay={700} />
             </div>
 
             {/* Strengths & Weaknesses */}
