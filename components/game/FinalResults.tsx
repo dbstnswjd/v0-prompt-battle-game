@@ -11,7 +11,10 @@ declare global {
     Kakao?: {
       init: (key: string) => void
       isInitialized: () => boolean
-      Share: {
+      Link?: {
+        sendDefault: (options: Record<string, unknown>) => void
+      }
+      Share?: {
         sendDefault: (options: Record<string, unknown>) => void
       }
     }
@@ -193,85 +196,63 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
 
   const rankText = myRank ? `\n현재 순위: ${myRank}위 / ${totalPlayers}명` : ''
   const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!${rankText}\n아이디어: ${roundData.ideaScore}점 | 프롬프트: ${roundData.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. AI가 판단한다.`
-  const shareUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const shareUrl = sessionId ? `${baseUrl}/share/${sessionId}` : baseUrl
 
   const kakaoInitialized = useRef(false)
 
   // Initialize Kakao SDK
   useEffect(() => {
     const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
-    console.log('[v0] Kakao init - key:', kakaoKey ? kakaoKey.slice(0, 6) + '...' : 'MISSING')
-    console.log('[v0] Kakao init - window.Kakao:', typeof window.Kakao)
+    if (!kakaoKey) return
 
     const initKakao = () => {
-      console.log('[v0] initKakao called - Kakao exists:', !!window.Kakao, 'isInitialized:', window.Kakao?.isInitialized?.())
-      if (!kakaoKey) {
-        console.log('[v0] KAKAO KEY IS MISSING - check NEXT_PUBLIC_KAKAO_JS_KEY env var')
-        return
-      }
-      try {
-        if (window.Kakao && !window.Kakao.isInitialized()) {
-          window.Kakao.init(kakaoKey)
-          kakaoInitialized.current = true
-          console.log('[v0] Kakao SDK initialized OK. Share available:', !!window.Kakao.Share)
-        } else if (window.Kakao?.isInitialized()) {
-          kakaoInitialized.current = true
-          console.log('[v0] Kakao SDK was already initialized')
-        }
-      } catch (e) {
-        console.error('[v0] Kakao init ERROR:', e)
+      if (window.Kakao && !window.Kakao.isInitialized()) {
+        window.Kakao.init(kakaoKey)
+        kakaoInitialized.current = true
+      } else if (window.Kakao?.isInitialized()) {
+        kakaoInitialized.current = true
       }
     }
 
     if (window.Kakao) {
       initKakao()
     } else {
-      console.log('[v0] Kakao not yet on window, starting poll...')
       const check = setInterval(() => {
         if (window.Kakao) {
-          console.log('[v0] Kakao appeared on window after polling')
           initKakao()
           clearInterval(check)
         }
       }, 300)
-      setTimeout(() => {
-        clearInterval(check)
-        console.log('[v0] Kakao poll timeout - Kakao loaded:', !!window.Kakao)
-      }, 10000)
+      setTimeout(() => clearInterval(check), 10000)
     }
   }, [])
 
   const handleKakaoShare = useCallback(() => {
-    console.log('[v0] Share clicked - Kakao:', !!window.Kakao, 'initialized:', window.Kakao?.isInitialized?.(), 'ref:', kakaoInitialized.current)
-    if (!window.Kakao || !window.Kakao.isInitialized()) {
-      // Last-ditch attempt to init
+    // Try to init if not yet initialized
+    if (window.Kakao && !window.Kakao.isInitialized()) {
       const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
-      if (window.Kakao && kakaoKey && !window.Kakao.isInitialized()) {
-        try {
-          window.Kakao.init(kakaoKey)
-          kakaoInitialized.current = true
-          console.log('[v0] Late init succeeded')
-        } catch (e) {
-          console.error('[v0] Late init failed:', e)
-        }
+      if (kakaoKey) {
+        try { window.Kakao.init(kakaoKey) } catch { /* ignore */ }
       }
-      if (!window.Kakao?.isInitialized()) {
-        setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
-        setTimeout(() => setShareMessage(''), 2000)
-        return
-      }
+    }
+
+    if (!window.Kakao?.isInitialized()) {
+      setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
+      setTimeout(() => setShareMessage(''), 2000)
+      return
     }
 
     const description = myRank
       ? `${finalScore}점 (${grade}등급) | 순위: ${myRank}위 / ${totalPlayers}명\n아이디어 ${roundData.ideaScore}점 | 프롬프트 ${roundData.promptScore}점`
       : `${finalScore}점 (${grade}등급)\n아이디어 ${roundData.ideaScore}점 | 프롬프트 ${roundData.promptScore}점`
 
-    window.Kakao!.Share.sendDefault({
+    const sharePayload = {
       objectType: 'feed',
       content: {
         title: '프롬프트 배틀 결과',
         description,
-        imageUrl: `${shareUrl}/og-image.png`,
+        imageUrl: `${baseUrl}/og-image.png`,
         link: {
           mobileWebUrl: shareUrl,
           webUrl: shareUrl,
@@ -286,7 +267,17 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
           },
         },
       ],
-    })
+    }
+
+    // v1 SDK uses Kakao.Link, v2 SDK uses Kakao.Share
+    if (window.Kakao.Link?.sendDefault) {
+      window.Kakao.Link.sendDefault(sharePayload)
+    } else if (window.Kakao.Share?.sendDefault) {
+      window.Kakao.Share.sendDefault(sharePayload)
+    } else {
+      setShareMessage('카카오 공유 기능을 사용할 수 없습니다.')
+      setTimeout(() => setShareMessage(''), 2000)
+    }
   }, [finalScore, grade, myRank, totalPlayers, roundData.ideaScore, roundData.promptScore, shareUrl])
 
   const generateShareImage = useCallback((): Promise<Blob> => {
