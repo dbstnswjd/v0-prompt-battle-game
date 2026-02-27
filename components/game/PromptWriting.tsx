@@ -35,11 +35,13 @@ export function PromptWriting({ roundNumber, onSubmit }: PromptWritingProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showExample, setShowExample] = useState(true)
 
+  const isPromptEmpty = prompt.trim().length === 0
+
   const handleSubmit = () => {
-    if (isSubmitting) return
+    if (isSubmitting || isPromptEmpty) return
     setIsSubmitting(true)
     setTimeout(() => {
-      onSubmit(prompt || '(작성하지 않음)')
+      onSubmit(prompt)
     }, 400)
   }
 
@@ -128,9 +130,9 @@ export function PromptWriting({ roundNumber, onSubmit }: PromptWritingProps) {
         {/* Submit button */}
         <motion.button
           onClick={handleSubmit}
-          disabled={isSubmitting}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          disabled={isSubmitting || isPromptEmpty}
+          whileHover={!isPromptEmpty ? { scale: 1.02 } : {}}
+          whileTap={!isPromptEmpty ? { scale: 0.98 } : {}}
           className="w-full py-4 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isSubmitting ? (
