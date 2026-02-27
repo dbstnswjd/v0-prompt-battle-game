@@ -292,7 +292,7 @@ function classifyTypes(d: PromptDetails, a: ReturnType<typeof analyze>): Problem
   // TYPE_G: 충돌/모순 포함형
   if (a.toneConflict || a.scopeConflict || a.hasDuplicateInstructions) types.push({ type: 'G', weight: 3 })
 
-  types.sort((a, b) => b.weight - a.weight)
+  types.sort((x, y) => y.weight - x.weight)
   const primary = types[0]?.type
   const secondaries = types.slice(1, 3).map(t => t.type)
   return primary ? [primary, ...secondaries] : ['A']
