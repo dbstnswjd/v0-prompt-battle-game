@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Trophy, RotateCcw, CheckCircle, XCircle, Sparkles, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
@@ -63,6 +63,7 @@ function getRankBg(rank: number, isMe: boolean) {
 }
 
 export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: FinalResultsProps) {
+  const captureRef = useRef<HTMLDivElement>(null)
   const [animatedScore, setAnimatedScore] = useState(0)
   const [showDetails, setShowDetails] = useState(false)
   const [shareMessage, setShareMessage] = useState('')
@@ -173,194 +174,43 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
     setShowRanking(!showRanking)
   }
 
-  // Generate share image on canvas
-  const generateShareImage = useCallback((): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 1080
-      canvas.height = 1920
-      const ctx = canvas.getContext('2d')!
-
-      // Background
-      const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920)
-      bgGrad.addColorStop(0, '#1e1033')
-      bgGrad.addColorStop(0.5, '#2d1b69')
-      bgGrad.addColorStop(1, '#1a0d2e')
-      ctx.fillStyle = bgGrad
-      ctx.fillRect(0, 0, 1080, 1920)
-
-      // Decorative circles
-      ctx.globalAlpha = 0.08
-      ctx.beginPath()
-      ctx.arc(200, 400, 300, 0, Math.PI * 2)
-      ctx.fillStyle = '#8b5cf6'
-      ctx.fill()
-      ctx.beginPath()
-      ctx.arc(880, 1400, 250, 0, Math.PI * 2)
-      ctx.fillStyle = '#d946ef'
-      ctx.fill()
-      ctx.globalAlpha = 1
-
-      // Title
-      ctx.textAlign = 'center'
-      ctx.fillStyle = '#a78bfa'
-      ctx.font = 'bold 48px sans-serif'
-      ctx.fillText('PROMPT BATTLE', 540, 440)
-
-      // Score circle
-      const scoreGrad = ctx.createLinearGradient(390, 550, 690, 950)
-      scoreGrad.addColorStop(0, '#8b5cf6')
-      scoreGrad.addColorStop(1, '#d946ef')
-      ctx.beginPath()
-      ctx.arc(540, 750, 180, 0, Math.PI * 2)
-      ctx.strokeStyle = scoreGrad
-      ctx.lineWidth = 12
-      ctx.stroke()
-
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 120px sans-serif'
-      ctx.fillText(`${finalScore}`, 540, 785)
-      ctx.font = 'bold 32px sans-serif'
-      ctx.fillStyle = '#c4b5fd'
-      ctx.fillText('SCORE', 540, 835)
-
-      // Grade
-      ctx.font = 'bold 64px sans-serif'
-      ctx.fillStyle = '#fbbf24'
-      ctx.fillText(grade, 540, 1020)
-
-      // Ranking section
-      if (myRank && totalPlayers > 0) {
-        // Rank badge background
-        const rankBoxY = 1080
-        ctx.fillStyle = 'rgba(251, 191, 36, 0.1)'
-        ctx.beginPath()
-        ctx.roundRect(290, rankBoxY, 500, 120, 24)
-        ctx.fill()
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)'
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.roundRect(290, rankBoxY, 500, 120, 24)
-        ctx.stroke()
-
-        // Trophy icon (text fallback)
-        ctx.font = '40px sans-serif'
-        ctx.fillText('\uD83C\uDFC6', 370, rankBoxY + 72)
-
-        // Rank text
-        ctx.textAlign = 'center'
-        ctx.font = 'bold 28px sans-serif'
-        ctx.fillStyle = '#fde68a'
-        ctx.fillText('나의 순위', 540, rankBoxY + 45)
-        ctx.font = 'bold 48px sans-serif'
-        ctx.fillStyle = '#fbbf24'
-        ctx.fillText(`${myRank}위`, 490, rankBoxY + 95)
-        ctx.font = '28px sans-serif'
-        ctx.fillStyle = '#fde68a80'
-        ctx.fillText(`/ ${totalPlayers}명`, 600, rankBoxY + 95)
-      }
-
-      // Score breakdown
-      const breakdownY = myRank ? 1280 : 1180
-      ctx.textAlign = 'center'
-
-      // Prompt score box (centered)
-      ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'
-      ctx.beginPath()
-      ctx.roundRect(290, breakdownY, 500, 100, 20)
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)'
-      ctx.lineWidth = 2
-      ctx.beginPath()
-      ctx.roundRect(290, breakdownY, 500, 100, 20)
-      ctx.stroke()
-      ctx.font = '28px sans-serif'
-      ctx.fillStyle = '#c4b5fd'
-      ctx.fillText('프롬프트 점수', 540, breakdownY + 38)
-      ctx.font = 'bold 44px sans-serif'
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText(`${roundData.promptScore}점`, 540, breakdownY + 83)
-
-      // Top 3 ranking preview (if available)
-      if (rankings.length > 0) {
-        const topY = breakdownY + 150
-        ctx.fillStyle = 'rgba(255,255,255,0.04)'
-        ctx.beginPath()
-        ctx.roundRect(140, topY, 800, Math.min(rankings.length, 5) * 60 + 50, 20)
-        ctx.fill()
-
-        ctx.font = 'bold 24px sans-serif'
-        ctx.fillStyle = '#a78bfa'
-        ctx.fillText('RANKING', 540, topY + 35)
-
-        const medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49']
-        const top = rankings.slice(0, 5)
-        top.forEach((entry, i) => {
-          const rowY = topY + 65 + i * 55
-          const rowBg = entry.isMe ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)'
-          ctx.fillStyle = rowBg
-          ctx.beginPath()
-          ctx.roundRect(180, rowY - 18, 720, 48, 12)
-          ctx.fill()
-
-          ctx.textAlign = 'left'
-          ctx.font = '24px sans-serif'
-          ctx.fillStyle = '#ffffff'
-          const prefix = i < 3 ? medals[i] : `${entry.rank}.`
-          ctx.fillText(prefix, 200, rowY + 10)
-
-          const name = entry.isMe ? 'ME' : `\uCC38\uAC00\uC790 ${entry.rank}`
-          ctx.font = entry.isMe ? 'bold 24px sans-serif' : '24px sans-serif'
-          ctx.fillStyle = entry.isMe ? '#c4b5fd' : '#e2d9f3'
-          ctx.fillText(name, 270, rowY + 10)
-
-          ctx.textAlign = 'right'
-          ctx.font = 'bold 24px sans-serif'
-          ctx.fillStyle = '#ffffff'
-          ctx.fillText(`${entry.score}점`, 860, rowY + 10)
-          ctx.textAlign = 'center'
-        })
-      }
-
-      // Footer
-      ctx.textAlign = 'center'
-      ctx.font = '28px sans-serif'
-      ctx.fillStyle = '#7c6faa'
-      ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1770)
-      ctx.font = '24px sans-serif'
-      ctx.fillText('AI가 판단한다.', 540, 1810)
-
-      canvas.toBlob((blob) => resolve(blob!), 'image/png')
-    })
-  }, [finalScore, grade, roundData.promptScore, myRank, totalPlayers, rankings])
-
-  // Download share image
+  // Download share image — html2canvas로 실제 화면 캡처
   const handleDownloadImage = useCallback(async () => {
-    if (downloading) return
+    if (downloading || !captureRef.current) return
     setDownloading(true)
     try {
-      const blob = await generateShareImage()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `prompt-battle-${finalScore}점-${grade}.png`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      setShareMessage('���미지가 저장되었습니다!')
-      setTimeout(() => setShareMessage(''), 2000)
+      const html2canvas = (await import('html2canvas')).default
+      const canvas = await html2canvas(captureRef.current, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      })
+      canvas.toBlob((blob) => {
+        if (!blob) return
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `prompt-battle-${finalScore}점-${grade}.png`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        setShareMessage('이미지가 저장되었습니다!')
+        setTimeout(() => setShareMessage(''), 2000)
+      }, 'image/png')
     } catch {
       setShareMessage('이미지 생성에 실패했습니다.')
       setTimeout(() => setShareMessage(''), 2000)
     } finally {
       setDownloading(false)
     }
-  }, [downloading, generateShareImage, finalScore, grade])
+  }, [downloading, finalScore, grade])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
       <motion.div
+        ref={captureRef}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-2xl w-full"
@@ -702,7 +552,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 className="w-full py-4 bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-violet-200 font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <RotateCcw className="w-5 h-5" />
-                <span>다시 도���하기</span>
+                <span>다시 도전하기</span>
               </button>
             </div>
           </motion.div>
