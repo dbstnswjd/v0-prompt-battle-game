@@ -297,7 +297,7 @@ function buildFeedback(
   if (d.interpStability <= 4)
     weakPoints.push(a.vagueWords.length >= 2
       ? `"${a.vagueWords.slice(0, 2).join('", "')}" 같은 표현은 해석 기준이 불명확해 AI 출력이 일관되지 않을 수 있습니다.`
-      : '표현의 모호성으로 인해 결과 해석 방향이 여러 갈래로 열려 있습니다.')
+      : '표현의 모호성으로 인해 결과 해석 ���향이 여러 갈래로 열려 있습니다.')
   if (d.executability <= 5)
     weakPoints.push('단계적 지시나 출력 요구 사항이 부족해 AI가 어디서 멈춰야 할지, 어떤 형식으로 답해야 할지 판단하기 어렵습니다.')
   if (a.toneConflict || a.scopeConflict)
@@ -348,41 +348,59 @@ function buildFeedback(
   return parts.join('\n\n')
 }
 
-// ─── 강점 / 약점 ──────────────────────────────────────────────────
+// ─── 개선점 (상세) ────────────────────────────────────────────────
 function buildStrengthsWeaknesses(d: PromptDetails, a: ReturnType<typeof analyze>) {
-  const strengths: string[] = []
   const weaknesses: string[] = []
 
-  if (d.reqClarity >= 11) strengths.push('요청 의도와 작업 동사가 명확합니다')
-  else if (d.reqClarity <= 5) weaknesses.push('요청 동사가 불명확하거나 추상적입니다')
+  // ① 요구 명확도
+  if (d.reqClarity <= 5)
+    weaknesses.push('요청 동사가 불명확하거나 추상적입니다. "만들어줘", "분석해줘"처럼 AI가 수행할 행동을 명확한 동사로 시작해보세요.')
+  else if (d.reqClarity <= 9)
+    weaknesses.push('목표는 있지만 성공 기준이 빠져 있습니다. "~한 결과를 기대한다", "~조건을 충족해야 한다"처럼 완료 기준을 추가해보세요.')
 
-  if (d.infoSufficiency >= 14) strengths.push('충분한 맥락, 대상 사용자, 조건 정보가 포함되어 있습니다')
-  else if (d.infoSufficiency <= 7) weaknesses.push(!a.hasTargetUserWho ? '대상 사용자가 명시되지 않았습니다' : '작업에 필요한 맥락 정보가 부족합니다')
-  if (d.funcSpec >= 10) strengths.push('기능과 인터랙션 흐름이 구체적으로 설계되어 있습니다')
-  else if (d.funcSpec <= 4) weaknesses.push('기능 명세나 사용자 인터랙션이 부족합니다')
+  // ② 정보 충분성 — 타겟 사용자 중심
+  if (!a.hasTargetUserWho)
+    weaknesses.push('누구를 위한 앱/서비스인지 명시되지 않았습니다. "20대 직장인", "앱 개발 경험이 없는 소상공인" 등 구체적인 타겟을 적어보세요.')
+  else if (!a.hasTargetAge && !a.hasTargetContext)
+    weaknesses.push('대상 사용자의 연령대나 사용 상황이 빠져 있습니다. 타겟의 디지털 친숙도나 사용 환경을 추가하면 AI 출력의 적합성이 높아집니다.')
+  if (!a.hasBackground && d.infoSufficiency <= 12)
+    weaknesses.push('요청 배경이 없어 AI가 맥락을 임의로 가정해야 합니다. 왜 이것이 필요한지, 어떤 상황에서 쓰이는지 한 문장이라도 추가해보세요.')
 
-  if (d.specificity >= 11) strengths.push('수치와 출력 형식이 구체적으로 제시되어 있습니다')
-  else if (d.specificity <= 4) weaknesses.push('구체적 조건이나 출력 형식이 명시되지 않았습니다')
+  // ③ 기능 명세
+  if (d.funcSpec <= 4)
+    weaknesses.push('기능 목록이 나열되더라도 사용자가 무엇을 선택·입력하고, 시스템이 무엇을 보여주는지 인터랙션 흐름이 없으면 AI가 기능을 피상적으로 설명합니다.')
+  else if (!a.hasDataFlow && d.funcSpec <= 9)
+    weaknesses.push('기능 간 데이터 흐름(입력→저장→표시, 기록→통계 등)이 명시되지 않았습니다. 데이터가 어떻게 이동하는지 한 줄이라도 서술해보세요.')
 
-  if (d.interpStability >= 8) strengths.push('해석 여지가 좁아 결과가 예측 가능합니다')
-  else if (d.interpStability <= 3) weaknesses.push('표현이 모호해 다양한 방향으로 해석될 수 있습니다')
+  // ④ 구체성
+  if (d.specificity <= 4)
+    weaknesses.push('수치, 범위, 출력 형식이 전혀 지정되지 않았습니다. "3개 이상", "표 형식으로", "최대 500자" 같은 구체적 조건을 추가해보세요.')
+  else if (a.outputFormats.length === 0)
+    weaknesses.push('AI에게 출력 형식(목록, 표, 코드, 요약 등)을 지정하지 않으면 매번 다른 포맷으로 응답할 수 있습니다.')
 
-  if (d.executability >= 11) strengths.push('단계적 지시로 AI가 즉시 실행 가능합니다')
-  else if (d.executability <= 5) weaknesses.push('AI가 작업 순서나 범위를 스스로 결정해야 합니다')
+  // ⑤ 해석 안정성
+  if (d.interpStability <= 3)
+    weaknesses.push('표현이 모호해 동일한 프롬프트로도 전혀 다른 결과가 나올 수 있습니다. 모호한 형용사 대신 측정 가능한 기준을 사용해보세요.')
+  if (a.toneConflict || a.scopeConflict)
+    weaknesses.push('내부 지시 간 충돌이 감지되었습니다. 예: "간단하게"와 "상세하게"처럼 서로 모순된 조건이 있는지 확인해보세요.')
 
-  if (d.structureOrg >= 7) strengths.push('문장 구조가 잘 정리되어 있습니다')
-  if (a.hasRole) strengths.push('역할 지정으로 일관된 전문성이 유지됩니다')
-  if (a.toneConflict || a.scopeConflict) weaknesses.push('내부 지시 간 충돌이 감지되었습니다')
-  if (a.vagueWords.length >= 3) weaknesses.push('추상적 표현이 많아 결과 일관성이 낮을 수 있습니다')
+  // ⑥ 실행 가능성
+  if (d.executability <= 5)
+    weaknesses.push('AI가 어디서 시작하고 어디서 멈춰야 하는지 판단하기 어렵습니다. 작업을 단계별로 나누거나 우선순위를 명시해보세요.')
 
-  while (strengths.length < 2) strengths.push(
-    strengths.length === 0 ? '기본적인 요청 구조를 갖추고 있습니다' : '읽기 쉬운 문장 구조입니다'
-  )
-  while (weaknesses.length < 2) weaknesses.push(
-    weaknesses.length === 0 ? '더 구체적인 맥락을 추가하면 좋겠습니다' : '출력 형식이나 수치 기준을 지정해보세요'
-  )
+  // ⑦ 구조 조직력
+  if (d.structureOrg <= 3)
+    weaknesses.push('하나의 긴 문장에 모든 요구사항이 섞여 있습니다. 조건·배경·요청을 분리해서 작성하면 AI가 더 정확하게 이해합니다.')
 
-  return { strengths: strengths.slice(0, 3), weaknesses: weaknesses.slice(0, 3) }
+  // ⑧ 추상어 과다
+  if (a.vagueWords.length >= 4)
+    weaknesses.push(`"${a.vagueWords.slice(0, 3).join('", "')}" 등 추상적 표현이 많습니다. 이런 단어는 AI마다 다르게 해석되므로 구체적 기준으로 교체해보세요.`)
+
+  // 개선점이 없는 경우 (고득점)
+  if (weaknesses.length === 0)
+    weaknesses.push('전반적으로 잘 작성된 프롬프트입니다. 엣지 케이스나 예외 처리 조건을 추가하면 더 완성도 높은 결과를 얻을 수 있습니다.')
+
+  return { strengths: [] as string[], weaknesses: weaknesses.slice(0, 5) }
 }
 
 // ─── 메인 ─────────────────────────────────────────────────────────
@@ -391,9 +409,9 @@ export function evaluatePrompt(prompt: string, _topic: string): EvaluationResult
     return {
       promptScore: 0,
       feedback: '유효하지 않은 입력입니다. 5자 이상의 의미 있는 프롬프트를 작성해 주세요.',
-      promptDetails: { reqClarity: 0, infoSufficiency: 0, specificity: 0, interpStability: 0, executability: 0, structureOrg: 0, intentConsist: 0, bonus: 0 },
-      strengths: ['프롬프트 작성에 도전해보세요', '기본 아이디어를 정리해보세요'],
-      weaknesses: ['5자 이상의 의미 있는 문장을 작성해주세요', '구체적인 주제를 포함해주세요'],
+      promptDetails: { reqClarity: 0, infoSufficiency: 0, funcSpec: 0, specificity: 0, interpStability: 0, executability: 0, structureOrg: 0, intentConsist: 0, bonus: 0 },
+      strengths: [],
+      weaknesses: ['5자 이상의 의미 있는 문장을 작성해주세요.', '누구를 위한 것인지, 어떤 기능이 필요한지 적어보세요.', '구체적인 조건이나 출력 형식도 함께 명시해보세요.'],
     }
   }
 

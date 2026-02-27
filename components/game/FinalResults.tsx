@@ -464,41 +464,25 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
               </div>
             </div>
 
-            {/* Strengths & Weaknesses */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {roundData.strengths.length > 0 && (
-                <div className="bg-emerald-500/[0.08] border border-emerald-500/20 rounded-2xl p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CheckCircle className="w-5 h-5 text-emerald-400" />
-                    <span className="font-semibold text-white">강점</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {roundData.strengths.map((s, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-emerald-100/80">
-                        <span className="text-emerald-400 mt-0.5 shrink-0">*</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
+            {/* Improvements */}
+            {roundData.weaknesses.length > 0 && (
+              <div className="bg-amber-500/[0.08] border border-amber-500/20 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <XCircle className="w-5 h-5 text-amber-400" />
+                  <span className="font-semibold text-white">개선점</span>
                 </div>
-              )}
-              {roundData.weaknesses.length > 0 && (
-                <div className="bg-amber-500/[0.08] border border-amber-500/20 rounded-2xl p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <XCircle className="w-5 h-5 text-amber-400" />
-                    <span className="font-semibold text-white">개선점</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {roundData.weaknesses.map((w, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-amber-100/80">
-                        <span className="text-amber-400 mt-0.5 shrink-0">*</span>
-                        <span>{w}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+                <ul className="space-y-3">
+                  {roundData.weaknesses.map((w, idx) => (
+                    <li key={idx} className="flex items-start gap-3 text-sm text-amber-100/80 leading-relaxed">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-[10px] font-bold text-amber-300 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span>{w}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Written Prompt */}
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-6">
