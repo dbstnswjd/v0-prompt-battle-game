@@ -140,10 +140,8 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
       const params = new URLSearchParams()
       if (phoneNumber) params.set('phone', phoneNumber)
       const url = `/api/game/ranking?${params.toString()}`
-      console.log('[v0] fetchRanking called, url:', url, 'phone:', phoneNumber)
       const res = await fetch(url)
       const json = await res.json()
-      console.log('[v0] ranking response:', res.status, JSON.stringify(json).slice(0, 300))
       if (res.ok) {
         setRankings(json.rankings || [])
         setMyRank(json.my_rank ?? null)
@@ -266,29 +264,22 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
       const breakdownY = myRank ? 1280 : 1180
       ctx.textAlign = 'center'
 
-      // Idea score box
+      // Prompt score box (centered)
       ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'
       ctx.beginPath()
-      ctx.roundRect(120, breakdownY, 400, 100, 20)
+      ctx.roundRect(290, breakdownY, 500, 100, 20)
       ctx.fill()
+      ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.roundRect(290, breakdownY, 500, 100, 20)
+      ctx.stroke()
       ctx.font = '28px sans-serif'
       ctx.fillStyle = '#c4b5fd'
-      ctx.fillText('아이디어', 320, breakdownY + 40)
-      ctx.font = 'bold 36px sans-serif'
+      ctx.fillText('프롬프트 점수', 540, breakdownY + 38)
+      ctx.font = 'bold 44px sans-serif'
       ctx.fillStyle = '#ffffff'
-      ctx.fillText(`${roundData.ideaScore}점`, 320, breakdownY + 80)
-
-      // Prompt score box
-      ctx.fillStyle = 'rgba(217, 70, 239, 0.15)'
-      ctx.beginPath()
-      ctx.roundRect(560, breakdownY, 400, 100, 20)
-      ctx.fill()
-      ctx.font = '28px sans-serif'
-      ctx.fillStyle = '#e9b5f6'
-      ctx.fillText('프롬프트', 760, breakdownY + 40)
-      ctx.font = 'bold 36px sans-serif'
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText(`${roundData.promptScore}점`, 760, breakdownY + 80)
+      ctx.fillText(`${roundData.promptScore}점`, 540, breakdownY + 83)
 
       // Top 3 ranking preview (if available)
       if (rankings.length > 0) {
@@ -341,7 +332,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
 
       canvas.toBlob((blob) => resolve(blob!), 'image/png')
     })
-  }, [finalScore, grade, roundData.ideaScore, roundData.promptScore, myRank, totalPlayers, rankings])
+  }, [finalScore, grade, roundData.promptScore, myRank, totalPlayers, rankings])
 
   // Download share image
   const handleDownloadImage = useCallback(async () => {
@@ -449,7 +440,8 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 <span className="ml-auto text-lg font-bold text-white">{roundData.promptScore}점</span>
               </div>
               <ScoreBar label="요구 명확도" score={Math.round((roundData.promptDetails.reqClarity / 15) * 100)} />
-              <ScoreBar label="정보 충분성" score={Math.round((roundData.promptDetails.infoSufficiency / 15) * 100)} />
+              <ScoreBar label="정보 충분성 (타겟 포함)" score={Math.round((roundData.promptDetails.infoSufficiency / 20) * 100)} />
+              <ScoreBar label="기능 명세 완성도" score={Math.round((roundData.promptDetails.funcSpec / 15) * 100)} />
               <ScoreBar label="구체성 수준" score={Math.round((roundData.promptDetails.specificity / 15) * 100)} />
               <ScoreBar label="해석 안정성" score={Math.round((roundData.promptDetails.interpStability / 10) * 100)} />
               <ScoreBar label="실행 가능성" score={Math.round((roundData.promptDetails.executability / 15) * 100)} />

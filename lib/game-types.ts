@@ -5,13 +5,14 @@ export interface RoundData {
   totalScore: number
   promptDetails: {
     reqClarity: number       // ① 요구 명확도 0~15
-    infoSufficiency: number  // ② 정보 충분성 0~15
-    specificity: number      // ③ 구체성 수준 0~15
-    interpStability: number  // ④ 해석 안정성 0~10
-    executability: number    // ⑤ 실행 가능성 0~15
-    structureOrg: number     // ⑥ 구조 조직력 0~10
-    intentConsist: number    // ⑦ 의도 일관성 0~10
-    bonus: number            // ⑧ 보정치 -5~+10
+    infoSufficiency: number  // ② 정보 충분성 0~20 (타겟 사용자 포함)
+    funcSpec: number         // ③ 기능 명세 완성도 0~15
+    specificity: number      // ④ 구체성 수준 0~15
+    interpStability: number  // ⑤ 해석 안정성 0~10
+    executability: number    // ⑥ 실행 가능성 0~15
+    structureOrg: number     // ⑦ 구조 조직력 0~10
+    intentConsist: number    // ⑧ 의도 일관성 0~10
+    bonus: number            // ⑨ 보정치 -5~+10
   }
   feedback: string
   strengths: string[]

@@ -2,13 +2,14 @@
 // ─── 타입 ─────────────────────────────────────────────────────────
 interface PromptDetails {
   reqClarity: number       // ① 요구 명확도 0–15
-  infoSufficiency: number  // ② 정보 충분성 0–15
-  specificity: number      // ③ 구체성 수준 0–15
-  interpStability: number  // ④ 해석 안정성 0–10
-  executability: number    // ⑤ 실행 가능성 0–15
-  structureOrg: number     // ⑥ 구조 조직력 0–10
-  intentConsist: number    // ⑦ 의도 일관성 0–10
-  bonus: number            // ⑧ 보정치 −5~+10
+  infoSufficiency: number  // ② 정보 충분성 0–20 (타겟 사용자 E항목 추가)
+  funcSpec: number         // ③ 기능 명세 완성도 0–15 (NEW)
+  specificity: number      // ④ 구체성 수준 0–15
+  interpStability: number  // ⑤ 해석 안정성 0–10
+  executability: number    // ⑥ 실행 가능성 0–15
+  structureOrg: number     // ⑦ 구조 조직력 0–10
+  intentConsist: number    // ⑧ 의도 일관성 0–10
+  bonus: number            // ⑨ 보정치 −5~+10
 }
 
 interface EvaluationResult {
@@ -66,6 +67,20 @@ function analyze(text: string) {
   const hasTarget = /(?:사용자|고객|대상|타겟|팀|개발자|기획자|마케터|학생|초보|전문가|B2B|B2C)/i.test(text)
   const hasDomain = /(?:AI|SaaS|앱|플랫폼|서비스|시스템|기업|스타트업|마케팅|교육|의료|금융)/i.test(text)
 
+  // 타겟 사용자 정의 (E항목)
+  const hasTargetUserWho = /(?:누구|사용자|타겟|대상|고객층|유저|이용자|사용할 사람|쓸 사람|위한)/i.test(text)
+  const hasTargetAge = /(?:\d+대|청소년|어린이|노인|시니어|MZ|2030|3040|중장년|초등|중등|고등|대학)/i.test(text)
+  const hasTargetPurpose = /(?:목적|용도|원해서|하려고|활용|위해|사용하려|쓰려고|할 때|상황에서)/i.test(text)
+  const hasTargetContext = /(?:상황|환경|현장|업무|일상|학습|출근|퇴근|운동|쇼핑|여행|비즈니스)/i.test(text)
+
+  // 기능 명세 (③ 기능 명세 완성도)
+  const hasFuncName = /(?:기능|모듈|메뉴|화면|페이지|버튼|탭|섹션|서비스|피처|feature)/i.test(text)
+  const hasFuncPurpose = /(?:할 수 있|가능하게|제공|지원|처리|관리|보여|표시|저장|전송|알림|분석)/i.test(text)
+  const hasUserAction = /(?:선택|입력|클릭|스크롤|탭|필터|검색|업로드|다운로드|설정|조회|등록|삭제|수정)/i.test(text)
+  const hasSystemResponse = /(?:보여줍니다|표시합니다|저장됩니다|전송됩니다|생성됩니다|알림|업데이트|반영)/i.test(text)
+  const hasDataFlow = /(?:기록.*저장|저장.*시각화|입력.*분석|데이터.*흐름|전송.*처리|추천.*로직|통계)/i.test(text)
+  const hasFuncDecomp = /(?:하위|세부|단위|구성|요소|컴포넌트|모듈|기능.*목록|목록.*기능)/i.test(text)
+
   // 조건/제약
   const hasCondition = /(?:만약|조건|경우|상황|때는|이라면|다면|단,|주의|제외|제한)/i.test(text)
   const hasConstraint = /(?:금지|사용하지|포함하지|제외|피해|하지 마)/i.test(text)
@@ -100,6 +115,8 @@ function analyze(text: string) {
     numbers, quantifiers, outputFormats,
     hasRole, hasPurpose, hasBackground,
     hasTarget, hasDomain,
+    hasTargetUserWho, hasTargetAge, hasTargetPurpose, hasTargetContext,
+    hasFuncName, hasFuncPurpose, hasUserAction, hasSystemResponse, hasDataFlow, hasFuncDecomp,
     hasCondition, hasConstraint,
     connectorCount, hasSteps,
     hasLineBreaks, hasBullet,
@@ -109,7 +126,7 @@ function analyze(text: string) {
   }
 }
 
-// ─── 8개 항목 채점 ────────────────────────────────────────────────
+// ─── 9개 항목 채점 ────────────────────────────────────────────────
 function scoreAll(text: string): { details: PromptDetails; raw: number } {
   const a = analyze(text)
 
@@ -129,112 +146,118 @@ function scoreAll(text: string): { details: PromptDetails; raw: number } {
   reqClarity += Math.max(0, 3 - a.vagueWords.length)
   reqClarity = Math.max(0, Math.min(15, reqClarity))
 
-  // ② 정보 충분성 (0–15)
+  // ② 정보 충분성 — 강화판 (0–20)
   let infoSufficiency = 0
-  // A. 대상 정의 (0–4)
+  // A. 대상 정의 (0–3)
   if (a.hasTarget) infoSufficiency += 2
-  if (a.hasDomain) infoSufficiency += 2
+  if (a.hasDomain) infoSufficiency += 1
   // B. 맥락 제공 (0–4)
   if (a.hasPurpose) infoSufficiency += 2
   if (a.hasBackground) infoSufficiency += 2
-  // C. 입력 데이터 / 예시 (0–4)
-  if (a.numbers.length >= 1) infoSufficiency += 2
+  // C. 입력 데이터 / 예시 (0–3)
+  if (a.numbers.length >= 1) infoSufficiency += 1
   if (a.wordCount >= 20) infoSufficiency += 1
   if (a.wordCount >= 40) infoSufficiency += 1
   // D. 조건 명시 (0–3)
   if (a.hasCondition) infoSufficiency += 2
   if (a.hasConstraint) infoSufficiency += 1
+  // E. 타겟 사용자 정의 (0–7) — NEW, 매우 중요
+  if (a.hasTargetUserWho) infoSufficiency += 2   // 누구를 위한 앱인지
+  if (a.hasTargetAge) infoSufficiency += 2        // 연령대/직군
+  if (a.hasTargetPurpose) infoSufficiency += 2    // 목적/용도
+  if (a.hasTargetContext) infoSufficiency += 1    // 사용 상황/환경
   if (a.hasDuplicateInstructions) infoSufficiency = Math.max(0, infoSufficiency - 2)
-  infoSufficiency = Math.max(0, Math.min(15, infoSufficiency))
+  infoSufficiency = Math.max(0, Math.min(20, infoSufficiency))
 
-  // ③ 구체성 수준 (0–15)
+  // ③ 기능 명세 완성도 (0–15) — NEW
+  let funcSpec = 0
+  // A. 기능 정의 명확성 (0–4)
+  if (a.hasFuncName) funcSpec += 2
+  if (a.hasFuncPurpose) funcSpec += 2
+  // B. 기능 단위 분해도 (0–4)
+  if (a.hasFuncDecomp) funcSpec += 2
+  if (a.hasUserAction) funcSpec += 2
+  // C. 사용자 인터랙션 명시성 (0–4) — 실무 차별화 포인트
+  if (a.hasUserAction && a.hasSystemResponse) funcSpec += 3  // 양방향 흐름
+  else if (a.hasUserAction || a.hasSystemResponse) funcSpec += 1
+  // D. 데이터 흐름 암시 (0–3)
+  if (a.hasDataFlow) funcSpec += 3
+  funcSpec = Math.max(0, Math.min(15, funcSpec))
+
+  // ④ 구체성 수준 (0–15)
   let specificity = 0
-  // A. 정량 요소 (0–5)
   specificity += Math.min(5, a.quantifiers.length * 2 + (a.numbers.length >= 1 ? 1 : 0))
-  // B. 요구사항 분해도 (0–4)
   if (a.hasSteps) specificity += 2
   if (a.hasBullet) specificity += 2
-  // C. 추상어 비율 (0–3)
   specificity += Math.max(0, 3 - a.vagueWords.length)
-  // D. 출력 형태 명시성 (0–3)
   specificity += Math.min(3, a.outputFormats.length)
   if (a.hasDuplicateInstructions) specificity = Math.max(0, specificity - 1)
   specificity = Math.max(0, Math.min(15, specificity))
 
-  // ④ 해석 안정성 (0–10)
+  // ⑤ 해석 안정성 (0–10)
   let interpStability = 5
-  // A. 다중 해석 가능 표현
   interpStability -= Math.min(3, a.vagueWords.length)
-  // B. 범위 개방도
   if (a.hasCondition) interpStability += 2
   if (a.hasConstraint) interpStability += 1
-  // C. 지시 충돌
   if (a.toneConflict) interpStability -= 2
   if (a.scopeConflict) interpStability -= 2
   interpStability = Math.max(0, Math.min(10, interpStability))
 
-  // ⑤ 실행 가능성 (0–15)
+  // ⑥ 실행 가능성 (0–15)
   let executability = 0
-  // A. 행동 지시 명확성 (0–4)
   executability += Math.min(4, a.clearVerbs.length * 2)
-  // B. 단계성 (0–4)
   if (a.hasSteps) executability += 3
   if (a.connectorCount >= 2) executability += 1
-  // C. 출력 요구 명확성 (0–4)
   executability += Math.min(4, a.outputFormats.length * 2)
-  // D. 작업 단위 적절성 (0–3)
   if (!a.isOverlyVerbose && a.wordCount >= 8) executability += 2
   if (a.wordCount >= 15) executability += 1
   if (a.isOverlyVerbose) executability -= 2
   executability = Math.max(0, Math.min(15, executability))
 
-  // ⑥ 구조 조직력 (0–10)
+  // ⑦ 구조 조직력 (0–10)
   let structureOrg = 3
-  // A. 문장 분리도
   if (a.sentenceCount >= 2) structureOrg += 2
-  // B. 논리 흐름
   structureOrg += Math.min(3, a.connectorCount)
-  // C. 정보 배치 / 가독성
   if (a.hasLineBreaks) structureOrg += 1
   if (a.hasBullet) structureOrg += 1
   structureOrg = Math.max(0, Math.min(10, structureOrg))
 
-  // ⑦ 의도 일관성 (0–10)
+  // ⑧ 의도 일관성 (0–10)
   let intentConsist = 8
-  // A. 목표 충돌
   if (a.toneConflict) intentConsist -= 3
-  // B. 톤 충돌
   if (a.scopeConflict) intentConsist -= 3
-  // C. 범위 충돌 (중복 지시)
   if (a.hasDuplicateInstructions) intentConsist -= 2
   intentConsist = Math.max(0, Math.min(10, intentConsist))
 
-  // ⑧ 보정치 (−5~+10)
+  // ⑨ 보정치 (−5~+10)
   let bonus = 0
-  if (a.outputFormats.length >= 1) bonus += 2   // 명확한 출력 포맷
-  if (a.hasRole) bonus += 2                       // 역할 지정
-  if (a.hasSteps) bonus += 2                      // 단계 요구
-  if (a.hasConstraint) bonus += 1                 // 제약 조건
-  if (a.hasSuccessCriteria) bonus += 2            // 평가 기준 포함
-  if (a.isOverlyVerbose) bonus -= 2               // 과도한 장황함
-  if (a.hasDuplicateInstructions) bonus -= 2      // 중복 지시
-  if (a.vagueWords.length >= 4) bonus -= 1        // 불필요 수식어
+  if (a.outputFormats.length >= 1) bonus += 2
+  if (a.hasRole) bonus += 2
+  if (a.hasSteps) bonus += 2
+  if (a.hasConstraint) bonus += 1
+  if (a.hasSuccessCriteria) bonus += 2
+  if (a.hasTargetUserWho && a.hasTargetPurpose) bonus += 1  // 타겟+목적 동시 만족
+  if (a.hasUserAction && a.hasSystemResponse) bonus += 1    // 인터랙션 양방향
+  if (a.isOverlyVerbose) bonus -= 2
+  if (a.hasDuplicateInstructions) bonus -= 2
+  if (a.vagueWords.length >= 4) bonus -= 1
   bonus = Math.max(-5, Math.min(10, bonus))
 
-  const raw = reqClarity + infoSufficiency + specificity + interpStability + executability + structureOrg + intentConsist + bonus
+  // raw max = 15+20+15+15+10+15+10+10+10 = 120
+  const raw = reqClarity + infoSufficiency + funcSpec + specificity + interpStability + executability + structureOrg + intentConsist + bonus
 
   return {
-    details: { reqClarity, infoSufficiency, specificity, interpStability, executability, structureOrg, intentConsist, bonus },
+    details: { reqClarity, infoSufficiency, funcSpec, specificity, interpStability, executability, structureOrg, intentConsist, bonus },
     raw,
   }
 }
 
 // ─── 최종 점수 계산 ───────────────────────────────────────────────
-// raw max = 15+15+15+10+15+10+10+10 = 100
-// 기준치 = 40 (중간 프롬프트 평균 raw 값)
-// final = clamp(50 + (raw - 40), 0, 100)
+// raw max = 15+20+15+15+10+15+10+10+10 = 120
+// 기준치 = 50 (중간 프롬프트 평균 raw 값)
+// final = clamp(50 + (raw - 50), 0, 100)
 function calcFinalScore(raw: number): number {
-  return Math.max(0, Math.min(100, 50 + (raw - 40)))
+  return Math.max(0, Math.min(100, 50 + (raw - 50)))
 }
 
 // ─── 자연어 총평 생성 ─────────────────────────────────────────────
@@ -261,8 +284,14 @@ function buildFeedback(
   const weakPoints: string[] = []
   if (d.reqClarity <= 6)
     weakPoints.push('행동 동사가 불명확하거나 "해줘", "알아서"와 같은 추상적 지시가 포함되어 있어 AI가 작업의 경계를 스스로 추정해야 합니다.')
-  if (d.infoSufficiency <= 6)
-    weakPoints.push('대상, 배경, 조건 등 작업에 필요한 핵심 맥락이 부족해 AI가 빈 부분을 임의로 채울 가능성이 있습니다.')
+  if (d.infoSufficiency <= 8)
+    weakPoints.push(
+      !a.hasTargetUserWho
+        ? '대상 사용자가 명시되지 않았습니다. 누구를 위한 것인지, 어떤 상황에서 사용하는지를 추가하면 AI 출력의 적절성이 크게 높아집니다.'
+        : '대상, 배경, 조건 등 작업에 필요한 핵심 맥락이 부족해 AI가 빈 부분을 임의로 채울 가능성이 있습니다.'
+    )
+  if (d.funcSpec <= 5)
+    weakPoints.push('기능 목록이 있더라도 사용자 인터랙션(선택/입력/결과 표시)이나 데이터 흐름이 없으면 AI가 기능을 피상적으로 설명하게 됩니다.')
   if (d.specificity <= 5)
     weakPoints.push('수량, 단계, 출력 형식 등 구체적인 조건이 없어 결과물의 형태가 매번 달라질 수 있습니다.')
   if (d.interpStability <= 4)
@@ -281,7 +310,12 @@ function buildFeedback(
   // ③ 잘된 부분
   const goodPoints: string[] = []
   if (d.reqClarity >= 11) goodPoints.push('요청 동사와 목표가 명확하게 표현되어 AI가 작업 범위를 즉시 파악할 수 있습니다.')
-  if (d.infoSufficiency >= 11) goodPoints.push('충분한 맥락과 대상 정보가 포함되어 있어 AI가 방향을 스스로 설정할 필요가 없습니다.')
+  if (d.infoSufficiency >= 14) goodPoints.push(
+    a.hasTargetUserWho && a.hasTargetPurpose
+      ? '대상 사용자, 사용 목적, 맥락이 모두 포함되어 있어 AI가 최적화된 수준으로 출력을 조정할 수 있습니다.'
+      : '충분한 맥락과 대상 정보가 포함되어 있어 AI가 방향을 스스로 설정할 필요가 없습니다.'
+  )
+  if (d.funcSpec >= 10) goodPoints.push('사용자 인터랙션과 데이터 흐름이 명시되어 있어 AI가 실제 개발 가능한 수준으로 기능을 설계할 수 있습니다.')
   if (d.specificity >= 11) goodPoints.push('정량 요소나 출력 형식이 구체적으로 제시되어 결과의 일관성을 높이는 데 기여합니다.')
   if (d.interpStability >= 8) goodPoints.push('해석의 여지가 좁게 설정되어 AI 출력이 예측 가능한 범위 안에서 수렴할 가능성이 높습니다.')
   if (d.executability >= 11) goodPoints.push('단계적 지시와 출력 요구가 명확해 AI가 즉시 작업에 착수할 수 있는 구조입니다.')
@@ -297,7 +331,9 @@ function buildFeedback(
   // ④ 개선 방향 (행동 중심)
   const improvements: string[] = []
   if (!a.hasPurpose) improvements.push('요청의 목적이나 활용 상황을 한 문장으로 추가해보세요.')
-  if (!a.hasTarget) improvements.push('대상 사용자 또는 도메인을 명시하면 AI가 적절한 수준으로 답변을 조정합니다.')
+  if (!a.hasTargetUserWho) improvements.push('누구를 위한 앱/서비스인지(예: "20대 직장인", "초보 학습자")를 명시해보세요.')
+  else if (!a.hasTargetAge && !a.hasTargetContext) improvements.push('타겟 사용자의 연령대나 사용 상황을 추가하면 AI가 더 적합한 결과를 생성합니다.')
+  if (!a.hasUserAction) improvements.push('사용자가 무엇을 선택/입력하는지, 시스템이 무엇을 보여주는지 인터랙션 흐름을 적어보세요.')
   if (a.outputFormats.length === 0) improvements.push('원하는 출력 형식(예: "3단계로", "표 형태로", "항목별로")을 지정해보세요.')
   if (a.quantifiers.length === 0) improvements.push('개수, 길이, 단계 수 같은 수치 기준을 하나 추가하면 결과 일관성이 높아집니다.')
   if (!a.hasRole) improvements.push('역할을 지정(예: "당신은 마케팅 전문가입니다")하면 AI 답변의 전문성과 톤이 일관되게 유지됩니다.')
@@ -320,8 +356,10 @@ function buildStrengthsWeaknesses(d: PromptDetails, a: ReturnType<typeof analyze
   if (d.reqClarity >= 11) strengths.push('요청 의도와 작업 동사가 명확합니다')
   else if (d.reqClarity <= 5) weaknesses.push('요청 동사가 불명확하거나 추상적입니다')
 
-  if (d.infoSufficiency >= 11) strengths.push('충분한 맥락과 대상 정보가 포함되어 있습니다')
-  else if (d.infoSufficiency <= 5) weaknesses.push('작업에 필요한 맥락 정보가 부족합니다')
+  if (d.infoSufficiency >= 14) strengths.push('충분한 맥락, 대상 사용자, 조건 정보가 포함되어 있습니다')
+  else if (d.infoSufficiency <= 7) weaknesses.push(!a.hasTargetUserWho ? '대상 사용자가 명시되지 않았습니다' : '작업에 필요한 맥락 정보가 부족합니다')
+  if (d.funcSpec >= 10) strengths.push('기능과 인터랙션 흐름이 구체적으로 설계되어 있습니다')
+  else if (d.funcSpec <= 4) weaknesses.push('기능 명세나 사용자 인터랙션이 부족합니다')
 
   if (d.specificity >= 11) strengths.push('수치와 출력 형식이 구체적으로 제시되어 있습니다')
   else if (d.specificity <= 4) weaknesses.push('구체적 조건이나 출력 형식이 명시되지 않았습니다')
