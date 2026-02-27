@@ -21,12 +21,64 @@ interface EvaluationResult {
 }
 
 // ─── Hard filter ──────────────────────────────────────────────────
+
+// 노래 가사·일상 대화 등 프롬프트가 아닌 텍스트 감지
+function isNonPromptText(text: string): boolean {
+  const t = text.trim()
+
+  // ① 노래 가사 패턴: 후렴구 반복, "~해", "~야", 감정적 구어 가사 특유의 표현
+  const lyricsPatterns = [
+    /(?:랄랄라|라라라|나나나|아아아|오오오|우우우|예예예|헤이|워워워|올레|하하하|히히히)/i,
+    /(?:사랑해|보고싶어|그리워|떠났어|울었어|웃었어|기억해|잊지마|돌아와|떠나가)/,
+    // 노래 가사 특유의 라임 구조: 짧은 줄 + 감정어 반복
+    /^(.{2,15})\n\1/m,
+  ]
+
+  // ② 일상 대화 패턴: 인사, 잡담, 질문 없는 감탄사
+  const casualChatPatterns = [
+    /^(?:안녕|ㅎㅇ|ㅋㅋ|ㅎㅎ|ㄷㄷ|ㅠㅠ|ㅜㅜ|ㅇㅇ|ㄱㄱ|ㅂㅂ|ㅈㅂ|ㅅㄱ|반가워|잘있어|잘자|굿모닝|굿밤)/i,
+    /^(?:오늘\s*(?:뭐|어떻게|밥|날씨|기분)|밥\s*먹었|뭐\s*해|심심|졸려|배고파|피곤)/,
+    /^(?:ㅋ{2,}|ㅎ{2,}|ㅠ{2,}|ㅜ{2,}|ㅇ{2,})/,
+  ]
+
+  // ③ 의미 없는 단순 감탄·단어 나열 (프롬프트 지시 구조 전혀 없음)
+  // 단어 수 5개 이하이고 명령/지시 동사·목적어 구조가 없는 경우
+  const words = t.split(/\s+/).filter(Boolean)
+  const hasCommandStructure =
+    /(?:작성|분석|비교|생성|만들|설계|구현|요약|정리|추천|설명|조사|평가|기획|개발|만들어|해줘|알려|보여|찾아|정리해|써줘|그려|번역|수정|검토|제안|리뷰|코딩|디자인|기획해)/
+      .test(t)
+  const hasTopicOrObject =
+    /(?:앱|서비스|시스템|기능|화면|페이지|코드|글|문서|계획|전략|아이디어|방법|방안|이유|차이|비교|예시|목록|요약|보고서|분석|데이터|사용자|고객|팀|회사|프로젝트|플랫폼|AI|프롬프트)/i
+      .test(t)
+
+  // ④ 노래 가사 강력 패턴: 짧은 줄바꿈 구조 + 감정어 다수
+  const lines = t.split(/\n/).filter(l => l.trim().length > 0)
+  const shortLines = lines.filter(l => l.trim().length <= 20)
+  const emotionWords = (t.match(/(?:사랑|그리움|슬픔|행복|눈물|꿈|별|밤|하늘|바람|마음|기억|설레|두근|떨려|아파|아프다|외로워|외롭다)/g) || [])
+  const isLyricsStructure = lines.length >= 3 && shortLines.length / lines.length >= 0.7 && emotionWords.length >= 2
+
+  // ⑤ 일상 대화: 물음표·명령 없이 감정/상태 서술만 있는 짧은 텍스트
+  const isCasualOnly =
+    words.length <= 10 &&
+    !hasCommandStructure &&
+    !hasTopicOrObject &&
+    !/(?:\?|？|어떻게|무엇|왜|언제|어디|누가|몇|얼마)/.test(t)
+
+  if (lyricsPatterns.some(p => p.test(t))) return true
+  if (casualChatPatterns.some(p => p.test(t))) return true
+  if (isLyricsStructure) return true
+  if (isCasualOnly) return true
+
+  return false
+}
+
 function isInvalidPrompt(text: string): boolean {
   const t = text.trim()
   if (t.length < 5) return true
   if (/^[^가-힣a-zA-Z0-9]+$/.test(t)) return true
   if (/(.)\1{4,}/.test(t)) return true
   if (/^(asdf|qwer|zxcv|1234|ㅁㄴㅇㄹ|ㅂㅈㄷㄱ)/i.test(t)) return true
+  if (isNonPromptText(t)) return true
   return false
 }
 
@@ -501,12 +553,21 @@ function buildStrengthsWeaknesses(d: PromptDetails, a: ReturnType<typeof analyze
 // ─── 메인 ─────────────────────────────────────────────────────────
 export function evaluatePrompt(prompt: string, _topic: string): EvaluationResult {
   if (isInvalidPrompt(prompt)) {
+    // 노래 가사·일상 대화 여부에 따라 피드백 메시지 구분
+    const isNonPrompt = isNonPromptText(prompt.trim())
+    const feedback = isNonPrompt
+      ? '노래 가사, 일상 대화, 감탄사 등은 프롬프트로 인정되지 않습니다. AI에게 무언가를 만들거나 분석하도록 지시하는 문장을 작성해 주세요.'
+      : '유효하지 않은 입력입니다. 5자 이상의 의미 있는 프롬프트를 작성해 주세요.'
     return {
       promptScore: 0,
-      feedback: '유효하지 않은 입력입니다. 5자 이상의 의미 있는 프롬프트를 작성해 주세요.',
+      feedback,
       promptDetails: { reqClarity: 0, infoSufficiency: 0, funcSpec: 0, specificity: 0, interpStability: 0, executability: 0, structureOrg: 0, intentConsist: 0, bonus: 0 },
       strengths: [],
-      weaknesses: ['5자 이상의 의미 있는 문장을 작성해주세요.', '누구를 위한 것인지, 어떤 기능이 필요한지 적어보세요.', '구체적인 조건이나 출력 형식도 함께 명시해보세요.'],
+      weaknesses: [
+        '프롬프트는 AI에게 작업을 지시하는 문장이어야 합니다.',
+        '예: "~앱을 만들어줘", "~를 분석해줘", "~를 요약해줘"처럼 명확한 지시를 작성하세요.',
+        '노래 가사, 일상 대화, 단순 감탄사는 0점 처리됩니다.',
+      ],
     }
   }
 
