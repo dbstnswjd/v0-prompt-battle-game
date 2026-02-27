@@ -473,16 +473,18 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
               <ScoreBar label="논리 연결성" score={Math.min(100, 50 + roundData.promptDetails.logicScore * 3)} />
             </div>
 
-            {/* Improved Prompt */}
+            {/* AI Feedback */}
             <div className="bg-sky-500/[0.06] border border-sky-500/20 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5 text-sky-400" />
-                <span className="font-semibold text-white">개선된 프롬프트</span>
+                <span className="font-semibold text-white">AI 총평</span>
               </div>
-              <div className="bg-white/[0.05] border border-sky-500/10 rounded-xl p-4">
-                <p className="text-sky-100/90 leading-relaxed text-sm whitespace-pre-wrap break-words">
-                  {roundData.improvedPrompt}
-                </p>
+              <div className="space-y-3">
+                {roundData.feedback.split('\n\n').map((paragraph, idx) => (
+                  <p key={idx} className="text-violet-100/80 leading-relaxed text-sm">
+                    {paragraph}
+                  </p>
+                ))}
               </div>
             </div>
 

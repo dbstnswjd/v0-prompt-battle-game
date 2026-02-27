@@ -18,7 +18,7 @@ export interface RoundData {
     logicScore: number
     repetitionPenalty: number
   }
-  improvedPrompt: string
+  feedback: string
   strengths: string[]
   weaknesses: string[]
 }

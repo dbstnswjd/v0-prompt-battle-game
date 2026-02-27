@@ -85,7 +85,7 @@ export function GameFlow() {
         totalScore,
         ideaDetails: evaluation.ideaDetails,
         promptDetails: evaluation.promptDetails,
-        improvedPrompt: evaluation.improvedPrompt,
+        feedback: evaluation.feedback,
         strengths: evaluation.strengths,
         weaknesses: evaluation.weaknesses,
       }
