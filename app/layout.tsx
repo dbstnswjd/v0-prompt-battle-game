@@ -36,6 +36,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="dark">
+      <head>
+        <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js" crossOrigin="anonymous" />
+      </head>
       <body className="font-sans antialiased">
         {children}
         <Analytics />
