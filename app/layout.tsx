@@ -39,9 +39,8 @@ export default function RootLayout({
     <html lang="ko" className="dark">
       <body className="font-sans antialiased">
         <Script
-          src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"
+          src="https://developers.kakao.com/sdk/js/kakao.js"
           strategy="afterInteractive"
-          crossOrigin="anonymous"
         />
         {children}
         <Analytics />

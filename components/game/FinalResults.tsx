@@ -201,16 +201,18 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   useEffect(() => {
     const initKakao = () => {
       const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+      console.log('[v0] Kakao init attempt, key exists:', !!kakaoKey, 'Kakao loaded:', !!window.Kakao)
       if (!kakaoKey) return
       if (window.Kakao && !window.Kakao.isInitialized()) {
         window.Kakao.init(kakaoKey)
         kakaoInitialized.current = true
+        console.log('[v0] Kakao SDK initialized successfully')
       } else if (window.Kakao?.isInitialized()) {
         kakaoInitialized.current = true
+        console.log('[v0] Kakao SDK already initialized')
       }
     }
 
-    // SDK script may not be loaded yet
     if (window.Kakao) {
       initKakao()
     } else {
@@ -220,12 +222,12 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
           clearInterval(check)
         }
       }, 200)
-      // Stop checking after 5 seconds
       setTimeout(() => clearInterval(check), 5000)
     }
   }, [])
 
   const handleKakaoShare = useCallback(() => {
+    console.log('[v0] handleKakaoShare called, Kakao:', !!window.Kakao, 'initialized:', window.Kakao?.isInitialized())
     if (!window.Kakao || !window.Kakao.isInitialized()) {
       setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
       setTimeout(() => setShareMessage(''), 2000)
@@ -677,7 +679,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
                   className="py-4 bg-[#FEE500] hover:bg-[#FDD800] text-[#3C1E1E] font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <KakaoIcon className="w-5 h-5" />
-                  <span>카카오톡 공유</span>
+                  <span>친구에게 공유</span>
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
