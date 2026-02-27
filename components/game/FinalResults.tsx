@@ -441,14 +441,24 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 <span className="font-semibold text-white">프롬프트 구조 평가</span>
                 <span className="ml-auto text-lg font-bold text-white">{roundData.promptScore}점</span>
               </div>
+              <ScoreBar label="A. 기능 완성도" score={Math.round((roundData.promptDetails.funcCompleteness / 25) * 100)} />
+              <ScoreBar label="  A-1 사용자 여정" score={Math.round((roundData.promptDetails.funcA1 / 5) * 100)} />
+              <ScoreBar label="  A-2 핵심 기능 세트" score={Math.round((roundData.promptDetails.funcA2 / 5) * 100)} />
+              <ScoreBar label="  A-3 기능 의존성" score={Math.round((roundData.promptDetails.funcA3 / 5) * 100)} />
+              <ScoreBar label="  A-4 리텐션" score={Math.round((roundData.promptDetails.funcA4 / 5) * 100)} />
+              <ScoreBar label="  A-5 MVP 절단" score={Math.round((roundData.promptDetails.funcA5 / 5) * 100)} />
+              <ScoreBar label="B. 구체성 수준" score={Math.round((roundData.promptDetails.specificityScore / 25) * 100)} />
+              <ScoreBar label="  B-1 입력 정의" score={Math.round((roundData.promptDetails.specB1 / 5) * 100)} />
+              <ScoreBar label="  B-2 출력 명확도" score={Math.round((roundData.promptDetails.specB2 / 5) * 100)} />
+              <ScoreBar label="  B-3 상태 변화" score={Math.round((roundData.promptDetails.specB3 / 5) * 100)} />
+              <ScoreBar label="  B-4 조건·규칙" score={Math.round((roundData.promptDetails.specB4 / 5) * 100)} />
+              <ScoreBar label="  B-5 측정 가능 요소" score={Math.round((roundData.promptDetails.specB5 / 5) * 100)} />
               <ScoreBar label="요구 명확도" score={Math.round((roundData.promptDetails.reqClarity / 15) * 100)} />
-              <ScoreBar label="정보 충분성 (타겟 포함)" score={Math.round((roundData.promptDetails.infoSufficiency / 20) * 100)} />
-              <ScoreBar label="기능 명세 완성도" score={Math.round((roundData.promptDetails.funcSpec / 15) * 100)} />
-              <ScoreBar label="구체성 수준" score={Math.round((roundData.promptDetails.specificity / 15) * 100)} />
+              <ScoreBar label="정보 충분성" score={Math.round((roundData.promptDetails.infoSufficiency / 20) * 100)} />
               <ScoreBar label="해석 안정성" score={Math.round((roundData.promptDetails.interpStability / 10) * 100)} />
               <ScoreBar label="실행 가능성" score={Math.round((roundData.promptDetails.executability / 15) * 100)} />
               <ScoreBar label="구조 조직력" score={Math.round((roundData.promptDetails.structureOrg / 10) * 100)} />
-              <ScoreBar label="의도 일관성" score={Math.round((roundData.promptDetails.intentConsist / 10) * 100)} />
+              <ScoreBar label="코칭 반응성" score={Math.round((roundData.promptDetails.intentConsist / 10) * 100)} />
             </div>
 
             {/* AI Feedback */}
