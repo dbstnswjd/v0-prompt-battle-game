@@ -21,6 +21,8 @@ export async function GET(request: Request) {
       .select('session_id, phone_number, score')
       .order('score', { ascending: false })
 
+    console.log('[v0] ranking API - error:', error, 'count:', allScores?.length, 'sessionId:', sessionId)
+
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
