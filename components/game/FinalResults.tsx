@@ -70,6 +70,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   const [showRanking, setShowRanking] = useState(false)
   const [rankingLoading, setRankingLoading] = useState(false)
   const [rankingFetched, setRankingFetched] = useState(false)
+  const [rankingError, setRankingError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
 
   const finalScore = roundData.totalScore
@@ -131,20 +132,33 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   const fetchRanking = useCallback(async () => {
     if (rankingLoading) return
     setRankingLoading(true)
+    setRankingError(null)
     try {
       const params = new URLSearchParams()
       if (sessionId) params.set('session_id', sessionId)
       const url = `/api/game/ranking?${params.toString()}`
+      console.log('[v0] fetchRanking url:', url)
       const res = await fetch(url)
-      const json = await res.json()
+      const text = await res.text()
+      console.log('[v0] fetchRanking status:', res.status, 'body:', text.slice(0, 200))
+      let json
+      try { json = JSON.parse(text) } catch { json = null }
+      if (!json) {
+        setRankingError(`응답 파싱 실패 (status: ${res.status})`)
+        return
+      }
       if (res.ok) {
         setRankings(json.rankings || [])
-        setMyRank(json.my_rank || null)
+        setMyRank(json.my_rank ?? null)
         setTotalPlayers(json.total_players || 0)
         setRankingFetched(true)
+      } else {
+        setRankingError(json.error || `API 에러 (status: ${res.status})`)
       }
-    } catch {
-      // silently fail
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[v0] fetchRanking error:', msg)
+      setRankingError(`네트워크 에러: ${msg}`)
     } finally {
       setRankingLoading(false)
     }
@@ -557,9 +571,25 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
                           <div className="w-6 h-6 border-2 border-violet-400/30 border-t-violet-400 rounded-full animate-spin" />
                           <span className="ml-3 text-sm text-violet-300/60">랭킹 불러오는 중...</span>
                         </div>
+                      ) : rankingError ? (
+                        <div className="text-center py-8">
+                          <p className="text-red-400 text-sm mb-3">{rankingError}</p>
+                          <button
+                            onClick={() => fetchRanking()}
+                            className="px-4 py-2 bg-violet-500/20 border border-violet-500/30 rounded-lg text-sm text-violet-200 hover:bg-violet-500/30 transition-colors"
+                          >
+                            다시 시도
+                          </button>
+                        </div>
                       ) : rankings.length === 0 ? (
-                        <div className="text-center py-8 text-violet-300/50 text-sm">
-                          아직 랭킹 데이터가 없습니다.
+                        <div className="text-center py-8">
+                          <p className="text-violet-300/50 text-sm mb-3">아직 랭킹 데이터가 없습니다.</p>
+                          <button
+                            onClick={() => fetchRanking()}
+                            className="px-4 py-2 bg-violet-500/20 border border-violet-500/30 rounded-lg text-sm text-violet-200 hover:bg-violet-500/30 transition-colors"
+                          >
+                            다시 불러오기
+                          </button>
                         </div>
                       ) : (
                         <>
