@@ -1,10 +1,22 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Trophy, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
+
+declare global {
+  interface Window {
+    Kakao?: {
+      init: (key: string) => void
+      isInitialized: () => boolean
+      Share: {
+        sendDefault: (options: Record<string, unknown>) => void
+      }
+    }
+  }
+}
 
 interface FinalResultsProps {
   roundData: RoundData
@@ -85,6 +97,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   const [totalPlayers, setTotalPlayers] = useState(0)
   const [showRanking, setShowRanking] = useState(false)
   const [rankingLoading, setRankingLoading] = useState(false)
+  const [rankingFetched, setRankingFetched] = useState(false)
 
   const finalScore = roundData.totalScore
   const grade = getGrade(finalScore)
@@ -154,6 +167,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
         setRankings(json.rankings || [])
         setMyRank(json.my_rank || null)
         setTotalPlayers(json.total_players || 0)
+        setRankingFetched(true)
       }
     } catch (e) {
       console.error('[v0] Failed to fetch ranking:', e)
@@ -162,43 +176,262 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
     }
   }, [sessionId, rankingLoading])
 
+  // Auto-fetch ranking on mount to show user's rank
+  useEffect(() => {
+    if (!rankingFetched) {
+      fetchRanking()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleToggleRanking = () => {
-    if (!showRanking && rankings.length === 0) {
+    if (!showRanking && rankings.length === 0 && !rankingFetched) {
       fetchRanking()
     }
     setShowRanking(!showRanking)
   }
 
-  const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!\n아이디어: ${roundData.ideaScore}점 | 프롬프트: ${roundData.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. AI가 판단한다.`
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
+  const rankText = myRank ? `\n현재 순위: ${myRank}위 / ${totalPlayers}명` : ''
+  const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!${rankText}\n아이디어: ${roundData.ideaScore}점 | 프롬프트: ${roundData.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. AI가 판단한다.`
+  const shareUrl = typeof window !== 'undefined' ? window.location.origin : ''
+
+  const kakaoInitialized = useRef(false)
+
+  // Initialize Kakao SDK
+  useEffect(() => {
+    const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+    console.log('[v0] Kakao init - key:', kakaoKey ? kakaoKey.slice(0, 6) + '...' : 'MISSING')
+    console.log('[v0] Kakao init - window.Kakao:', typeof window.Kakao)
+
+    const initKakao = () => {
+      console.log('[v0] initKakao called - Kakao exists:', !!window.Kakao, 'isInitialized:', window.Kakao?.isInitialized?.())
+      if (!kakaoKey) {
+        console.log('[v0] KAKAO KEY IS MISSING - check NEXT_PUBLIC_KAKAO_JS_KEY env var')
+        return
+      }
+      try {
+        if (window.Kakao && !window.Kakao.isInitialized()) {
+          window.Kakao.init(kakaoKey)
+          kakaoInitialized.current = true
+          console.log('[v0] Kakao SDK initialized OK. Share available:', !!window.Kakao.Share)
+        } else if (window.Kakao?.isInitialized()) {
+          kakaoInitialized.current = true
+          console.log('[v0] Kakao SDK was already initialized')
+        }
+      } catch (e) {
+        console.error('[v0] Kakao init ERROR:', e)
+      }
+    }
+
+    if (window.Kakao) {
+      initKakao()
+    } else {
+      console.log('[v0] Kakao not yet on window, starting poll...')
+      const check = setInterval(() => {
+        if (window.Kakao) {
+          console.log('[v0] Kakao appeared on window after polling')
+          initKakao()
+          clearInterval(check)
+        }
+      }, 300)
+      setTimeout(() => {
+        clearInterval(check)
+        console.log('[v0] Kakao poll timeout - Kakao loaded:', !!window.Kakao)
+      }, 10000)
+    }
+  }, [])
 
   const handleKakaoShare = useCallback(() => {
-    const mobileKakaoUrl = `kakaotalk://msg/text/${encodeURIComponent(shareText)}`
-    if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-      window.location.href = mobileKakaoUrl
-      setTimeout(() => {
-        window.open(`https://story.kakao.com/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank')
-      }, 1500)
-    } else {
-      window.open(`https://story.kakao.com/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank')
+    console.log('[v0] Share clicked - Kakao:', !!window.Kakao, 'initialized:', window.Kakao?.isInitialized?.(), 'ref:', kakaoInitialized.current)
+    if (!window.Kakao || !window.Kakao.isInitialized()) {
+      // Last-ditch attempt to init
+      const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+      if (window.Kakao && kakaoKey && !window.Kakao.isInitialized()) {
+        try {
+          window.Kakao.init(kakaoKey)
+          kakaoInitialized.current = true
+          console.log('[v0] Late init succeeded')
+        } catch (e) {
+          console.error('[v0] Late init failed:', e)
+        }
+      }
+      if (!window.Kakao?.isInitialized()) {
+        setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
+        setTimeout(() => setShareMessage(''), 2000)
+        return
+      }
     }
-  }, [shareText, shareUrl])
+
+    const description = myRank
+      ? `${finalScore}점 (${grade}등급) | 순위: ${myRank}위 / ${totalPlayers}명\n아이디어 ${roundData.ideaScore}점 | 프롬프트 ${roundData.promptScore}점`
+      : `${finalScore}점 (${grade}등급)\n아이디어 ${roundData.ideaScore}점 | 프롬프트 ${roundData.promptScore}점`
+
+    window.Kakao!.Share.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: '프롬프트 배틀 결과',
+        description,
+        imageUrl: `${shareUrl}/og-image.png`,
+        link: {
+          mobileWebUrl: shareUrl,
+          webUrl: shareUrl,
+        },
+      },
+      buttons: [
+        {
+          title: '나도 도전하기',
+          link: {
+            mobileWebUrl: shareUrl,
+            webUrl: shareUrl,
+          },
+        },
+      ],
+    })
+  }, [finalScore, grade, myRank, totalPlayers, roundData.ideaScore, roundData.promptScore, shareUrl])
+
+  const generateShareImage = useCallback((): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1080
+      canvas.height = 1920
+      const ctx = canvas.getContext('2d')!
+
+      // Background gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920)
+      bgGrad.addColorStop(0, '#1e1033')
+      bgGrad.addColorStop(0.5, '#2d1b69')
+      bgGrad.addColorStop(1, '#1a0d2e')
+      ctx.fillStyle = bgGrad
+      ctx.fillRect(0, 0, 1080, 1920)
+
+      // Decorative circles
+      ctx.globalAlpha = 0.08
+      ctx.beginPath()
+      ctx.arc(200, 400, 300, 0, Math.PI * 2)
+      ctx.fillStyle = '#8b5cf6'
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(880, 1400, 250, 0, Math.PI * 2)
+      ctx.fillStyle = '#d946ef'
+      ctx.fill()
+      ctx.globalAlpha = 1
+
+      // Title
+      ctx.textAlign = 'center'
+      ctx.fillStyle = '#a78bfa'
+      ctx.font = 'bold 48px sans-serif'
+      ctx.fillText('PROMPT BATTLE', 540, 500)
+
+      // Score circle
+      const scoreGrad = ctx.createLinearGradient(390, 650, 690, 1050)
+      scoreGrad.addColorStop(0, '#8b5cf6')
+      scoreGrad.addColorStop(1, '#d946ef')
+      ctx.beginPath()
+      ctx.arc(540, 850, 200, 0, Math.PI * 2)
+      ctx.strokeStyle = scoreGrad
+      ctx.lineWidth = 12
+      ctx.stroke()
+
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 140px sans-serif'
+      ctx.fillText(`${finalScore}`, 540, 890)
+      ctx.font = 'bold 36px sans-serif'
+      ctx.fillStyle = '#c4b5fd'
+      ctx.fillText('SCORE', 540, 945)
+
+      // Grade
+      ctx.font = 'bold 72px sans-serif'
+      ctx.fillStyle = '#fbbf24'
+      ctx.fillText(grade, 540, 1130)
+
+      // Rank (if available)
+      if (myRank) {
+        ctx.font = 'bold 42px sans-serif'
+        ctx.fillStyle = '#fbbf24'
+        ctx.fillText(`${myRank}위 / ${totalPlayers}명`, 540, 1220)
+      }
+
+      // Scores breakdown
+      const detailY = myRank ? 1320 : 1280
+      ctx.font = '36px sans-serif'
+      ctx.fillStyle = '#e2d9f3'
+      ctx.fillText(`아이디어  ${roundData.ideaScore}점  |  프롬프트  ${roundData.promptScore}점`, 540, detailY)
+
+      // Footer
+      ctx.font = '28px sans-serif'
+      ctx.fillStyle = '#7c6faa'
+      ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1700)
+      ctx.font = '24px sans-serif'
+      ctx.fillText('AI가 판단한다.', 540, 1750)
+
+      canvas.toBlob((blob) => resolve(blob!), 'image/png')
+    })
+  }, [finalScore, grade, roundData.ideaScore, roundData.promptScore, myRank, totalPlayers])
 
   const handleInstagramShare = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(shareText)
-      setShareMessage('텍스트가 복사되었습니다! 인스타그램 스토리에 붙여넣기 하세요.')
-      setTimeout(() => setShareMessage(''), 3000)
-      if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-        window.location.href = 'instagram://app'
+      setShareMessage('스토리 이미지 생성 중...')
+      const imageBlob = await generateShareImage()
+      const file = new File([imageBlob], 'prompt-battle-result.png', { type: 'image/png' })
+
+      // Step 1: Try Web Share API with file (mobile: opens share sheet -> user picks Instagram Stories)
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        setShareMessage('')
+        await navigator.share({
+          files: [file],
+          title: '프롬프트 배틀 결과',
+        })
+        return
+      }
+
+      // Step 2: Upload to Blob and open Instagram web (fallback)
+      setShareMessage('인스타그램으로 이동 중...')
+
+      const reader = new FileReader()
+      const dataUrl: string = await new Promise((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.readAsDataURL(imageBlob)
+      })
+
+      const uploadRes = await fetch('/api/game/share-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData: dataUrl }),
+      })
+
+      if (!uploadRes.ok) throw new Error('Upload failed')
+
+      const { imageUrl } = await uploadRes.json()
+
+      // Copy image URL to clipboard and open Instagram
+      try {
+        await navigator.clipboard.writeText(imageUrl)
+      } catch {
+        // ignore
+      }
+
+      // Open Instagram app or web
+      const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent)
+      if (isMobile) {
+        window.location.href = 'instagram://story-camera'
+        setTimeout(() => {
+          window.open('https://www.instagram.com/', '_blank')
+        }, 1500)
       } else {
         window.open('https://www.instagram.com/', '_blank')
       }
-    } catch {
-      setShareMessage('복사에 실패했습니다.')
+
+      setShareMessage('이미지 URL이 복사되었습니다! 인스타그램 스토리에 붙여넣기 하세요.')
+      setTimeout(() => setShareMessage(''), 5000)
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setShareMessage('')
+        return
+      }
+      setShareMessage('공유에 실패했습니다. 다시 시도해주세요.')
       setTimeout(() => setShareMessage(''), 2000)
     }
-  }, [shareText])
+  }, [generateShareImage])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
@@ -253,6 +486,24 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
               <p className="text-2xl font-bold text-white">{roundData.promptScore}</p>
             </div>
           </div>
+
+          {/* My Rank Badge */}
+          {myRank && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.2 }}
+              className="mt-5 inline-flex items-center gap-3 px-6 py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl"
+            >
+              <Trophy className="w-5 h-5 text-amber-400" />
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm text-amber-200/70">나의 순위</span>
+                <span className="text-2xl font-bold text-amber-400 mx-1">{myRank}</span>
+                <span className="text-sm text-amber-200/70">위</span>
+                <span className="text-xs text-amber-200/40 ml-1">/ {totalPlayers}명</span>
+              </div>
+            </motion.div>
+          )}
         </div>
 
         {showDetails && (
@@ -456,7 +707,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
                   className="py-4 bg-[#FEE500] hover:bg-[#FDD800] text-[#3C1E1E] font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <KakaoIcon className="w-5 h-5" />
-                  <span>카카오톡 공유</span>
+                  <span>친구에게 공유</span>
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.02 }}
@@ -465,7 +716,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
                   className="py-4 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] hover:opacity-90 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <InstagramIcon className="w-5 h-5" />
-                  <span>인스타 공유</span>
+                  <span>인스타 스토리</span>
                 </motion.button>
               </div>
 
