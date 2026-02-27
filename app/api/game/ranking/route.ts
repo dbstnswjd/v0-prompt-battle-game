@@ -11,14 +11,14 @@ function getSupabase() {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const sessionId = searchParams.get('session_id')
+    const phone = searchParams.get('phone')
 
     const supabase = getSupabase()
 
     // Fetch all scores, ordered by score descending
     const { data: allScores, error } = await supabase
       .from('game_scores')
-      .select('session_id, phone_number, score, prompt_text')
+      .select('phone_number, score, prompt_text')
       .order('score', { ascending: false })
 
     if (error) {
@@ -34,13 +34,13 @@ export async function GET(request: Request) {
     }
 
     // Deduplicate by phone_number (keep highest score per player)
-    const bestByPhone = new Map<string, { session_id: string; score: number; prompt_text: string | null }>()
+    const bestByPhone = new Map<string, { phone_number: string; score: number; prompt_text: string | null }>()
     for (const row of allScores) {
-      const key = row.phone_number || row.session_id
+      const key = row.phone_number || 'unknown'
       const existing = bestByPhone.get(key)
       if (!existing || row.score > existing.score) {
         bestByPhone.set(key, {
-          session_id: row.session_id,
+          phone_number: row.phone_number,
           score: row.score,
           prompt_text: row.prompt_text || null,
         })
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     let myRank: number | null = null
     const rankings = sorted.map((entry, idx) => {
       const rank = idx + 1
-      const isMe = sessionId ? entry.session_id === sessionId : false
+      const isMe = phone ? entry.phone_number === phone : false
       if (isMe) myRank = rank
 
       return {

@@ -9,6 +9,7 @@ import { getGrade, getGradeColor } from '@/lib/game-types'
 interface FinalResultsProps {
   roundData: RoundData
   sessionId: string | null
+  phoneNumber: string
   onRestart: () => void
 }
 
@@ -61,7 +62,7 @@ function getRankBg(rank: number, isMe: boolean) {
   return 'bg-white/[0.03] border-white/10'
 }
 
-export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsProps) {
+export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: FinalResultsProps) {
   const [animatedScore, setAnimatedScore] = useState(0)
   const [showDetails, setShowDetails] = useState(false)
   const [shareMessage, setShareMessage] = useState('')
@@ -137,7 +138,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
     setRankingError(null)
     try {
       const params = new URLSearchParams()
-      if (sessionId) params.set('session_id', sessionId)
+      if (phoneNumber) params.set('phone', phoneNumber)
       const url = `/api/game/ranking?${params.toString()}`
       const res = await fetch(url)
       const json = await res.json()
@@ -155,7 +156,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
     } finally {
       setRankingLoading(false)
     }
-  }, [sessionId, rankingLoading])
+  }, [phoneNumber, rankingLoading])
 
   // Auto-fetch ranking on mount
   useEffect(() => {
@@ -354,7 +355,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      setShareMessage('이미지가 저장되었습니다!')
+      setShareMessage('���미지가 저장되었습니다!')
       setTimeout(() => setShareMessage(''), 2000)
     } catch {
       setShareMessage('이미지 생성에 실패했습니다.')

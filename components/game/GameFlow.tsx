@@ -130,6 +130,7 @@ export function GameFlow() {
           <FinalResults
             roundData={roundData!}
             sessionId={sessionIdRef.current}
+            phoneNumber={phoneRef.current}
             onRestart={handleRestart}
           />
         )
