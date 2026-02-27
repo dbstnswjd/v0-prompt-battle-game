@@ -174,18 +174,173 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
     setShowRanking(!showRanking)
   }
 
-  // Download share image — dom-to-image-more로 실제 화면 캡처
+  // Generate share image on canvas
+  const generateShareImage = useCallback((): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 1080
+        canvas.height = 1920
+        const ctx = canvas.getContext('2d')!
+
+        // Background
+        const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920)
+        bgGrad.addColorStop(0, '#1e1033')
+        bgGrad.addColorStop(0.5, '#2d1b69')
+        bgGrad.addColorStop(1, '#1a0d2e')
+        ctx.fillStyle = bgGrad
+        ctx.fillRect(0, 0, 1080, 1920)
+
+        // Decorative circles
+        ctx.globalAlpha = 0.08
+        ctx.beginPath()
+        ctx.arc(200, 400, 300, 0, Math.PI * 2)
+        ctx.fillStyle = '#8b5cf6'
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc(880, 1400, 250, 0, Math.PI * 2)
+        ctx.fillStyle = '#d946ef'
+        ctx.fill()
+        ctx.globalAlpha = 1
+
+        // Title
+        ctx.textAlign = 'center'
+        ctx.fillStyle = '#a78bfa'
+        ctx.font = 'bold 48px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillText('PROMPT BATTLE', 540, 440)
+
+        // Score circle
+        const scoreGrad = ctx.createLinearGradient(390, 550, 690, 950)
+        scoreGrad.addColorStop(0, '#8b5cf6')
+        scoreGrad.addColorStop(1, '#d946ef')
+        ctx.beginPath()
+        ctx.arc(540, 750, 180, 0, Math.PI * 2)
+        ctx.strokeStyle = scoreGrad
+        ctx.lineWidth = 12
+        ctx.stroke()
+
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 120px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillText(`${finalScore}`, 540, 785)
+        ctx.font = 'bold 32px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#c4b5fd'
+        ctx.fillText('SCORE', 540, 835)
+
+        // Grade
+        ctx.font = 'bold 64px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#fbbf24'
+        ctx.fillText(grade, 540, 1020)
+
+        // Ranking section
+        if (myRank && totalPlayers > 0) {
+          const rankBoxY = 1080
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.1)'
+          ctx.beginPath()
+          ctx.roundRect(290, rankBoxY, 500, 120, 24)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)'
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.roundRect(290, rankBoxY, 500, 120, 24)
+          ctx.stroke()
+
+          ctx.textAlign = 'center'
+          ctx.font = 'bold 28px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = '#fde68a'
+          ctx.fillText('나의 순위', 540, rankBoxY + 45)
+          ctx.font = 'bold 48px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = '#fbbf24'
+          ctx.fillText(`${myRank}위`, 490, rankBoxY + 95)
+          ctx.font = '28px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = 'rgba(253,230,138,0.5)'
+          ctx.fillText(`/ ${totalPlayers}명`, 600, rankBoxY + 95)
+        }
+
+        // Score breakdown
+        const breakdownY = myRank ? 1280 : 1180
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'
+        ctx.beginPath()
+        ctx.roundRect(290, breakdownY, 500, 100, 20)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.roundRect(290, breakdownY, 500, 100, 20)
+        ctx.stroke()
+        ctx.font = '28px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#c4b5fd'
+        ctx.textAlign = 'center'
+        ctx.fillText('프롬프트 점수', 540, breakdownY + 38)
+        ctx.font = 'bold 44px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(`${roundData.promptScore}점`, 540, breakdownY + 83)
+
+        // Top rankings
+        if (rankings.length > 0) {
+          const topY = breakdownY + 150
+          ctx.fillStyle = 'rgba(255,255,255,0.04)'
+          ctx.beginPath()
+          ctx.roundRect(140, topY, 800, Math.min(rankings.length, 5) * 60 + 50, 20)
+          ctx.fill()
+
+          ctx.font = 'bold 24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = '#a78bfa'
+          ctx.textAlign = 'center'
+          ctx.fillText('RANKING', 540, topY + 35)
+
+          const top = rankings.slice(0, 5)
+          top.forEach((entry, i) => {
+            const rowY = topY + 65 + i * 55
+            if (entry.isMe) {
+              ctx.fillStyle = 'rgba(139,92,246,0.2)'
+              ctx.beginPath()
+              ctx.roundRect(180, rowY - 18, 720, 48, 12)
+              ctx.fill()
+            }
+
+            ctx.textAlign = 'left'
+            ctx.font = '24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+            ctx.fillStyle = '#ffffff'
+            const rankLabel = i === 0 ? '1' : i === 1 ? '2' : i === 2 ? '3' : `${entry.rank}`
+            ctx.fillText(`${rankLabel}.`, 210, rowY + 10)
+
+            const name = entry.isMe ? 'ME' : `참가자 ${entry.rank}`
+            ctx.font = entry.isMe ? 'bold 24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif' : '24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+            ctx.fillStyle = entry.isMe ? '#c4b5fd' : '#e2d9f3'
+            ctx.fillText(name, 260, rowY + 10)
+
+            ctx.textAlign = 'right'
+            ctx.font = 'bold 24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+            ctx.fillStyle = '#ffffff'
+            ctx.fillText(`${entry.score}점`, 860, rowY + 10)
+          })
+        }
+
+        // Footer
+        ctx.textAlign = 'center'
+        ctx.font = '26px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#7c6faa'
+        ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1770)
+        ctx.font = '22px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#5c4f8a'
+        ctx.fillText('AI가 판단한다.', 540, 1810)
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob)
+          else reject(new Error('blob is null'))
+        }, 'image/png')
+      } catch (e) {
+        reject(e)
+      }
+    })
+  }, [finalScore, grade, roundData.promptScore, myRank, totalPlayers, rankings])
+
+  // Download share image
   const handleDownloadImage = useCallback(async () => {
-    if (downloading || !captureRef.current) return
+    if (downloading) return
     setDownloading(true)
     try {
-      const domtoimage = (await import('dom-to-image-more')).default
-      const blob = await domtoimage.toBlob(captureRef.current, {
-        quality: 1,
-        scale: 2,
-        bgcolor: '#1e1033',
-        style: { borderRadius: '0' },
-      })
+      const blob = await generateShareImage()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -202,7 +357,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
     } finally {
       setDownloading(false)
     }
-  }, [downloading, finalScore, grade])
+  }, [downloading, generateShareImage, finalScore, grade])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
