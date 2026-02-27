@@ -308,114 +308,136 @@ function buildFeedback(
   const primary = types[0]
   const parts: string[] = []
 
-  // ── 1단계: PRD 관점 전반 진단 ──
-  // 5가지 PRD 기준 체크: 문제 정의 / 타겟 사용자 / 사용 시나리오 / 기능 범위 / 완료 기준
-  const prdCheck = {
-    problemDefined: a.hasPurpose || a.hasBackground,
-    targetDefined: a.hasTargetUserWho,
-    scenarioDefined: a.hasTargetContext || a.hasUserAction,
-    scopeDefined: a.hasFuncName && a.hasFuncPurpose,
-    doneCriteriaDefined: a.hasSuccessCriteria || a.hasConstraint,
-  }
-  const prdPassCount = Object.values(prdCheck).filter(Boolean).length
-
-  if (prdPassCount >= 4) {
-    parts.push('개발자가 바로 작업 단위를 나눌 수 있는 수준의 PRD입니다. 구조, 맥락, 기능 범위가 고르게 갖춰져 있습니다.')
-  } else if (prdPassCount === 3) {
-    parts.push('아이디어 수준에서는 이해되지만, 이 상태로는 개발자가 무엇을 어디까지 구현해야 하는지 명확하게 판단하기 어렵습니다.')
-  } else if (prdPassCount === 2) {
-    parts.push('방향은 잡혀 있지만, PRD로서 빠진 요소가 많습니다. 개발자에게 전달하면 추가 질문이 많이 나올 구조입니다.')
-  } else {
-    parts.push('현재 문서는 아이디어 메모 수준입니다. 이 상태로는 개발자가 구현 범위를 설정하기 어렵고, 기획 의도가 제대로 전달되지 않습니다.')
-  }
-
-  // ── 2단계: 빠진 PRD 요소 지적 (Before/After 포함) ──
-  const missing: string[] = []
-
-  if (!prdCheck.problemDefined) {
-    missing.push(
-      '이 기능이 해결하려는 사용자 상황이 빠져 있습니다.\n' +
-      'Before: "일정 관리 기능 만들어줘"\n' +
-      'After: "바쁜 직장인이 하루 할 일을 출근 전 2분 안에 정리할 수 있도록 돕는 기능이다."'
-    )
-  }
-
-  if (!prdCheck.targetDefined) {
-    missing.push(
-      '타겟 사용자가 명시되지 않았습니다. 누구를 위한 것인지에 따라 기능 우선순위와 UI 방향이 완전히 달라집니다.\n' +
-      'Before: "운동 기록 앱 만들어줘"\n' +
-      'After: "운동을 막 시작한 20~30대가 매일 10분 이내로 운동 기록을 남기는 앱이다."'
-    )
-  }
-
-  if (!prdCheck.scenarioDefined) {
-    missing.push(
-      '사용 시나리오가 없어 개발자가 화면 흐름을 설계하기 어렵습니다.\n' +
-      'Before: "파도 데이터 보여줘"\n' +
-      'After: "사용자가 현재 위치 기준 실시간 파도 높이와 예측 데이터를 확인할 수 있는 화면을 구성한다."'
-    )
+  // ── 1단계: 한 줄 진단 (매번 다른 표현, 프롬프트 유형별 맞춤) ──
+  const diagnosisMap: Record<ProblemType, string[]> = {
+    A: [
+      '요청의 방향은 감지되지만 AI가 목적을 확신하기 어려운 구조입니다.',
+      '무엇을 원하는지 알 것 같으면서도, AI가 해석을 스스로 완성해야 하는 프롬프트입니다.',
+      '의도가 흐릿하게 전달됩니다. AI가 추측해서 채워야 할 빈칸이 많습니다.',
+    ],
+    B: [
+      '기능 구상은 느껴지지만, AI가 실제로 설계하기엔 정보가 부족합니다.',
+      '만들고 싶은 것은 있는데, 무엇을 어떻게 만들어야 하는지 AI에게 전달되지 않았습니다.',
+      '기능 목록이 있어도 인터랙션 흐름 없이는 AI가 껍데기 수준의 결과만 냅니다.',
+    ],
+    C: [
+      '누구를 위한 것인지, 어떤 상황에서 쓰이는지가 빠져 있습니다.',
+      '배경이 없으면 AI는 가장 평범한 가정으로 채웁니다. 지금 이 프롬프트가 그 상태입니다.',
+      '타겟과 맥락이 없으면 AI 출력은 가장 일반적인 방향으로 흐릅니다.',
+    ],
+    D: [
+      `"${a.vagueWords.slice(0, 2).join('", "')}" 같은 표현이 프롬프트의 해석 범위를 넓혀놓고 있습니다.`,
+      '표현 자체는 자연스럽지만, AI가 기준을 잡기 어려운 단어들이 섞여 있습니다.',
+      '모호한 수식어가 많을수록 AI 출력은 매번 다른 방향으로 수렴합니다.',
+    ],
+    E: [
+      '요청 내용이 하나의 덩어리로 뭉쳐 있어 AI가 우선순위를 잡기 어렵습니다.',
+      '구조 없이 나열된 요구사항은 AI가 순서대로 처리하지 않을 수 있습니다.',
+      '읽기 어렵지는 않지만, AI가 어디서 시작해 어디서 끝내야 할지 불분명합니다.',
+    ],
+    F: [
+      '프롬프트 설계 측면에서 높은 완성도를 보입니다.',
+      '구조, 맥락, 지시가 잘 갖춰진 프롬프트입니다.',
+      '대부분의 요소가 제자리에 있습니다. 이 수준이면 AI가 의도에 가깝게 동작합니다.',
+    ],
+    G: [
+      '내부에서 충돌하는 지시가 발견됩니다. AI가 어느 쪽을 따를지 결정하지 못할 수 있습니다.',
+      '모순된 요건이 섞여 있어 AI 출력이 일관되지 않을 가능성이 높습니다.',
+      '지시들이 서로 다른 방향을 가리키고 있습니다.',
+    ],
   }
 
-  if (!prdCheck.scopeDefined) {
-    missing.push(
-      '기능 범위가 불명확합니다. "어디까지 만들면 되는지" 완료 기준이 없으면 개발자가 범위를 임의로 결정하게 됩니다.\n' +
-      'Before: "알림 기능도 넣어줘"\n' +
-      'After: "사용자가 목표 시간 30분 전에 푸시 알림을 받을 수 있어야 한다. 알림 켜기/끄기 설정 포함."'
-    )
+  const diagOptions = diagnosisMap[primary]
+  const diagIndex = (d.reqClarity + d.infoSufficiency) % diagOptions.length
+  parts.push(diagOptions[diagIndex])
+
+  // ── 2단계: 문제 유형별 맞춤 분석 (TYPE별 코칭 톤 적용) ──
+  const secondPart: string[] = []
+
+  if (primary === 'A' || types.includes('A')) {
+    // 방향 제시형 코칭
+    if (!a.hasPurpose)
+      secondPart.push('이 프롬프트에는 요청의 목적이 빠져 있습니다. "~을 위해", "~상황에서 사용할" 같은 맥락 문장 하나가 AI의 응답 방향을 완전히 바꿉니다.')
+    if (a.abstractVerbs.length >= 1)
+      secondPart.push(`"${a.abstractVerbs[0]}" 같은 추상적 지시 대신 "작성해줘", "단계별로 설명해줘"처럼 AI가 즉시 실행할 수 있는 동사로 바꿔보세요.`)
   }
 
-  if (!prdCheck.doneCriteriaDefined) {
-    missing.push(
-      '완료 기준이 없습니다. 개발 완료 시점을 어떻게 판단할지 명시해야 합니다.\n' +
-      'Before: "검색 기능 추가"\n' +
-      'After: "검색어 입력 후 0.5초 이내에 결과가 표시되어야 하며, 결과가 없으면 \'검색 결과 없음\' 메시지를 표시한다."'
-    )
+  if (primary === 'B' || types.includes('B')) {
+    // 방향 제시형 코칭
+    if (!a.hasUserAction && !a.hasSystemResponse)
+      secondPart.push('사용자가 버튼을 누르면 무슨 일이 생기는지, 어떤 화면이 나오는지, 이 흐름이 없으면 AI는 기능을 나열만 하고 설계하지 않습니다.')
+    if (!a.hasDataFlow && a.hasFuncName)
+      secondPart.push('기능 이름은 있지만 데이터가 어떻게 흐르는지가 없습니다. "입력하면 저장되고, 저장되면 목록에 표시된다"처럼 한 줄이라도 흐름을 써보세요.')
   }
 
-  if (missing.length > 0) {
-    parts.push('특히 다음 항목이 빠져 있습니다:\n\n' + missing.slice(0, 2).join('\n\n'))
+  if (primary === 'C' || types.includes('C')) {
+    // 명확화 유도형
+    if (!a.hasTargetUserWho)
+      secondPart.push('이 프롬프트에서 가장 크게 빠진 정보는 "누구를 위한 것인가"입니다. 타겟 사용자를 명시하면 AI가 어휘 수준, 기능 우선순위, 설명 방식 모두를 맞춰서 응답합니다.')
+    else if (!a.hasTargetAge && !a.hasTargetContext)
+      secondPart.push('대상이 누구인지는 언급됐지만, 그들이 어떤 상황에서 어떤 방식으로 쓰는지가 없습니다. 사용 맥락을 한 문장 추가해보세요.')
+    if (!a.hasBackground)
+      secondPart.push('왜 이것이 필요한지, 어떤 문제를 해결하려는지 배경 한 줄이 있으면 AI가 방향을 추측하지 않아도 됩니다.')
   }
 
-  // ── 3단계: 유형별 추가 코칭 ──
-  const coaching: string[] = []
-
-  if (primary === 'D' && a.vagueWords.length >= 2) {
-    coaching.push(
-      `"${a.vagueWords.slice(0, 2).join('", "')}" 같은 표현은 PRD에서 사용하기 어렵습니다. ` +
-      '개발자는 이 표현을 보고 구현 방식을 스스로 결정해야 합니다. ' +
-      '측정 가능한 기준으로 바꿔보세요.'
-    )
+  if (primary === 'D' || types.includes('D')) {
+    // 명확화 유도형
+    if (a.vagueWords.length >= 2)
+      secondPart.push(`"${a.vagueWords.slice(0, 2).join('", "')}" 같은 표현은 사람마다, AI마다 다르게 해석됩니다. 이 단어들을 "3줄 이내", "초등학생도 이해할 수 있는 수준"처럼 측정 가능한 기준으로 바꾸면 결과 일관성이 올라갑니다.`)
   }
 
-  if ((primary === 'G' || types.includes('G')) && (a.toneConflict || a.scopeConflict)) {
-    coaching.push(
-      '내부에서 충돌하는 요구사항이 감지됩니다. ' +
-      '예: "간단하게"와 "모든 기능을 포함"처럼 서로 다른 방향의 요건이 함께 있으면 개발자가 어느 쪽을 우선해야 할지 판단할 수 없습니다.'
-    )
+  if (primary === 'E' || types.includes('E')) {
+    // 구조 개선형
+    if (d.structureOrg <= 4)
+      secondPart.push('요청, 배경, 조건이 하나의 문장 안에 뒤섞여 있습니다. 이 세 가지를 분리해서 작성하면 AI가 각각을 독립적으로 처리하고 더 정확한 결과를 냅니다.')
+    if (!a.hasSteps && d.executability <= 7)
+      secondPart.push('복잡한 요청일수록 "먼저 ~ 다음으로 ~ 마지막으로"처럼 단계를 구분해주면 AI가 순서를 지켜서 처리합니다.')
   }
 
   if (primary === 'F') {
-    coaching.push(
-      '잘 작성된 PRD입니다. 한 단계 더 나아가려면 예외 케이스를 추가해보세요. ' +
-      '예: "데이터 로딩 실패 시 재시도 버튼을 표시한다", "오프라인 상태에서는 마지막 저장 데이터를 보여준다."'
-    )
+    // 고급 최적화형
+    secondPart.push('이 수준의 프롬프트에서 더 나아가려면 예외 상황이나 엣지 케이스를 추가하는 것이 효과적입니다. "만약 ~한 경우에는 ~하게 처리해줘" 형태의 조건을 넣으면 AI 응답의 견고성이 높아집니다.')
+    if (!a.hasRole)
+      secondPart.push('역할을 지정(예: "당신은 10년 경력의 UX 디자이너입니다")하면 같은 질문이라도 더 전문적인 관점의 응답이 나옵니다.')
   }
 
-  if (coaching.length > 0) {
-    parts.push(coaching[0])
+  if (primary === 'G' || types.includes('G')) {
+    // 충돌 해결형
+    if (a.toneConflict)
+      secondPart.push('톤과 관련해 충돌하는 표현이 감지됩니다. 예: "전문적으로"와 "쉽게"를 동시에 요구하면 AI가 어느 쪽도 제대로 못 지킵니다. 우선순위를 정해주세요.')
+    if (a.scopeConflict)
+      secondPart.push('범위와 관련해 충돌이 있습니다. "모두", "전부"와 "간단히", "요약"이 함께 있으면 AI가 임의로 하나를 선택합니다. 명확하게 하나만 선택해보세요.')
+    if (a.hasDuplicateInstructions)
+      secondPart.push('비슷한 지시가 반복되어 AI가 같은 내용을 여러 번 처리하거나 혼란스러워할 수 있습니다. 중복된 요구를 하나로 통합해보세요.')
   }
 
-  // ── 4단계: 다음 액션 (PRD 5기준 체크리스트 기반) ──
-  const unchecked = [
-    !prdCheck.problemDefined && '문제 정의: 이 기능이 해결하는 사용자 상황',
-    !prdCheck.targetDefined && '타겟 사용자: 누구를 위한 것인지 (연령, 상황)',
-    !prdCheck.scenarioDefined && '사용 시나리오: 사용자가 어떻게 쓰는지 흐름',
-    !prdCheck.scopeDefined && '기능 범위: 무엇을 만들어야 하는지 구체적 목록',
-    !prdCheck.doneCriteriaDefined && '완료 기준: 어디까지 만들면 되는지',
-  ].filter(Boolean) as string[]
+  if (secondPart.length > 0) {
+    parts.push(secondPart.slice(0, 2).join('\n\n'))
+  }
 
-  if (unchecked.length > 0 && primary !== 'F') {
-    parts.push('PRD 완성을 위해 다음을 추가해보세요:\n' + unchecked.slice(0, 3).map(u => `· ${u}`).join('\n'))
+  // ── 3단계: 행동 가능한 개선 방향 (1~2개, 구체적 예시 포함) ──
+  const actions: string[] = []
+
+  if (primary !== 'F') {
+    if (!a.hasTargetUserWho)
+      actions.push('타겟 사용자를 추가하세요. 예: "30대 자영업자를 위한", "앱 개발 경험이 없는 기획자가 사용할"')
+    else if (!a.hasTargetContext)
+      actions.push('사용 상황을 추가하세요. 예: "출퇴근 중 모바일로 빠르게 확인하는 상황", "주 1회 팀 회의에서 발표 자료로 활용"')
+
+    if (a.outputFormats.length === 0)
+      actions.push('출력 형식을 지정하세요. 예: "3단계 bullet로", "표 형식으로", "핵심만 2문장으로"')
+    else if (!a.hasUserAction)
+      actions.push('인터랙션 흐름을 추가하세요. 예: "사용자가 날짜를 선택하면 → 해당 기간 데이터를 차트로 표시한다"')
+
+    if (a.vagueWords.length >= 2 && !actions.some(a => a.includes('출력 형식')))
+      actions.push(`"${a.vagueWords[0]}" 대신 측정 가능한 기준을 사용하세요. 예: "적당히" → "3개 이내로"`)
+  } else {
+    actions.push('예외 처리 조건을 추가해보세요. 예: "데이터가 없을 경우에는 빈 상태 메시지를 표시한다"')
+    actions.push('성공 기준을 명시해보세요. 예: "초등학생이 읽어도 이해할 수 있는 수준", "5분 안에 읽을 수 있는 분량"')
+  }
+
+  if (actions.length > 0) {
+    parts.push('다음 중 하나만 추가해도 점수가 달라집니다:\n' + actions.slice(0, 2).map(a => `· ${a}`).join('\n'))
   }
 
   return parts.join('\n\n')
