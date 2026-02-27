@@ -1,15 +1,31 @@
 
 // ─── 타입 ─────────────────────────────────────────────────────────
 interface PromptDetails {
-  reqClarity: number       // ① 요구 명확도 0–15
-  infoSufficiency: number  // ② 정보 충분성 0–20
-  funcSpec: number         // ③ 기능 요구사항 명확도 0–20 (초세분화 v2)
-  specificity: number      // ④ 구체성 수준 0–15
-  interpStability: number  // ⑤ 해석 안정성 0–10
-  executability: number    // ⑥ 실행 가능성 0–15
-  structureOrg: number     // ⑦ 구조 조직력 0–10
-  intentConsist: number    // ⑧ 코칭 반응성 0–10 (Prompt Coachability)
-  bonus: number            // ⑨ 보정치 −5~+10
+  // ━━ A. 기능 완성도 (0–25) ━━
+  funcCompleteness: number   // A 합계
+  funcA1: number             // A-1 핵심 사용자 여정 커버리지 0–5
+  funcA2: number             // A-2 핵심 기능 세트 충족도 0–5
+  funcA3: number             // A-3 기능 간 의존성 설계 0–5
+  funcA4: number             // A-4 실제 사용 지속 가능성 0–5
+  funcA5: number             // A-5 MVP 절단 가능성 0–5
+  // ━━ B. 구체성 수준 (0–25) ━━
+  specificityScore: number   // B 합계
+  specB1: number             // B-1 입력 정의 명확도 0–5
+  specB2: number             // B-2 출력/결과 명확도 0–5
+  specB3: number             // B-3 상태 변화 정의 0–5
+  specB4: number             // B-4 조건 및 규칙 명시도 0–5
+  specB5: number             // B-5 측정 가능 요소 포함도 0–5
+  // ━━ 기존 보조 지표 ━━
+  reqClarity: number         // ① 요구 명확도 0–15
+  infoSufficiency: number    // ② 정보 충분성 0–20
+  funcSpec: number           // ③ 기능 요구사항 명확도 0–20 (내부 보조용)
+  interpStability: number    // ⑤ 해석 안정성 0–10
+  executability: number      // ⑥ 실행 가능성 0–15
+  structureOrg: number       // ⑦ 구조 조직력 0–10
+  intentConsist: number      // ⑧ 코칭 반응성 0–10
+  bonus: number              // ⑨ 보정치 −5~+10
+  // ━━ Ultra Strict 감점 ━━
+  ultraPenalty: number       // 강제 감점 합계 (음수)
 }
 
 interface EvaluationResult {
@@ -133,7 +149,7 @@ function analyze(text: string) {
   const hasDataFlow = /(?:기록.*저장|저장.*시각화|입력.*분석|데이터.*흐름|전송.*처리|추천.*로직|통계|저장.*목록|목록.*표시)/i.test(text)
   const hasFuncDecomp = /(?:하위|세부|단위|구성|요소|컴포넌트|모듈|기능.*목록|목록.*기능)/i.test(text)
 
-  // ③-1 행동 단위 표현도: 동사 중심·사용자 행동 주체·결과 상태 포함 여부
+  // ③-1 행동 단위 표현도: 동사 중심·사용자 행동 주체·���과 상태 포함 여부
   const hasActionVerb = /(?:조회한다|등록한다|저장한다|삭제한다|수정한다|필터링한다|전송한다|설정한다|확인한다|선택하면|입력하면|클릭하면|탭하면)/i.test(text)
   const hasResultState = /(?:완료되면|완료 후|저장되면|처리되면|이동한다|이동하면|표시된다|노출된다|나타난다|반환한다)/i.test(text)
 
@@ -177,6 +193,51 @@ function analyze(text: string) {
   const isOverlyVerbose = words.length > 150
   const hasDuplicateInstructions = dupRate > 0.35
 
+  // ━━ A. 기능 완성도 신호 ━━
+  // A-1: 사용자 여정 (진입→수행→완료)
+  const hasEntryTrigger = /(?:시작|접속|로그인|첫 화면|온보딩|가입|열면|실행하면|앱을 켜면|처음|진입)/i.test(text)
+  const hasCompletionState = /(?:완료|완성|끝|저장됨|제출됨|등록됨|처리됨|성공|결과 화면|확인 화면|마이페이지|히스토리)/i.test(text)
+  const hasUserJourneyFlow = hasEntryTrigger && hasUserAction && hasCompletionState
+
+  // A-2: 핵심 기능 세트 (Core·Supporting·결과확인·상태관리)
+  const hasCoreAction = /(?:핵심 기능|주요 기능|메인 기능|core|주기능|반드시|필수 기능)/i.test(text)
+  const hasSupportingFunc = /(?:알림|푸시|검색|필터|정렬|공유|즐겨찾기|북마크|설정|프로필|마이페이지)/i.test(text)
+  const hasResultCheck = /(?:결과 확인|이력|기록|히스토리|목록|조회|통계|대시보드|현황|내역)/i.test(text)
+  const hasStateManagement = /(?:상태|상태관리|세션|캐시|동기화|저장|갱신|업데이트|실시간)/i.test(text)
+
+  // A-3: 기능 간 의존성
+  const hasDependency = /(?:이후|다음|→|->|선행|후행|의존|연동|연결|기반으로|통해서|그 다음|이어서)/i.test(text)
+
+  // A-4: 리텐션 요소
+  const hasRetentionElement = /(?:재방문|재사용|알림|리마인더|기록|히스토리|개인화|맞춤|추천|습관|루틴|주기|정기)/i.test(text)
+
+  // A-5: MVP 절단 가능성 — 올인원 슈퍼앱 감지
+  const superAppKeywords = (text.match(/(?:로그인|채팅|추천|커뮤니티|AI|결제|소셜|지도|날씨|뉴스|쇼핑|배달)/gi) || [])
+  const isSuperApp = superAppKeywords.length >= 4
+
+  // ━━ B. 구체성 신호 ━━
+  // B-1: 입력 정의
+  const hasInputType = /(?:텍스트|숫자|날짜|파일|이미지|선택지|드롭다운|체크박스|라디오|슬라이더|입력창|폼|form)/i.test(text)
+  const hasInputValidation = /(?:필수|선택|최소|최대|자릿수|형식|유효|검증|validation|제한|조건|에러)/i.test(text)
+
+  // B-2: 출력/결과 정의
+  const hasOutputScreen = /(?:화면|페이지|팝업|모달|토스트|알림창|배너|카드|리스트|테이블|차트|그래프)/i.test(text)
+  const hasSuccessState = /(?:성공 메시지|완료 화면|결과 페이지|확인 화면|피드백|응답|출력|표시)/i.test(text)
+  // 추상 출력 표현 감지 (감점용)
+  const hasAbstractOutput = /(?:결과 제공|보여줌|알려줌|출력함)/.test(text)
+
+  // B-3: 상태 변화 (before/after)
+  const hasBeforeAfter = /(?:변경|변화|업데이트|갱신|상태 전환|전환|바뀌면|바뀐다|되면|된다|저장되면|저장된다)/i.test(text)
+  const hasSystemReactionDetailed = /(?:자동으로 저장|실시간으로|즉시|즉각|바로|알림이 간다|이메일이 발송|푸시가 온다)/i.test(text)
+
+  // B-4: 조건/규칙
+  const hasConditionalLogic = /(?:만약|~하면|~경우|조건|~일 때|~이라면|분기|예외|경우에 따라|else|otherwise)/i.test(text)
+  const hasBranchLogic = /(?:아닐 경우|그렇지 않으면|반대로|~가 아니면|~가 없으면|없을 때|실패 시|오류 시)/i.test(text)
+
+  // B-5: 측정 가능 요소
+  const hasKPI = /(?:KPI|전환율|클릭률|DAU|MAU|잔존율|성과|목표 수치|지표|metric|analytics)/i.test(text)
+  const hasFrequency = /(?:매일|매주|주\s*\d+회|월\s*\d+회|\d+분마다|\d+시간마다|실시간|즉시|주기적)/i.test(text)
+
   return {
     words, wordCount: words.length, charCount: text.length,
     sentences, sentenceCount: sentences.length,
@@ -198,116 +259,235 @@ function analyze(text: string) {
     hasSuccessCriteria,
     toneConflict, scopeConflict,
     isOverlyVerbose, hasDuplicateInstructions,
+    // A. 기능 완성도 신호
+    hasEntryTrigger, hasCompletionState, hasUserJourneyFlow,
+    hasCoreAction, hasSupportingFunc, hasResultCheck, hasStateManagement,
+    hasDependency,
+    hasRetentionElement,
+    superAppKeywords, isSuperApp,
+    // B. 구체성 신호
+    hasInputType, hasInputValidation,
+    hasOutputScreen, hasSuccessState, hasAbstractOutput,
+    hasBeforeAfter, hasSystemReactionDetailed,
+    hasConditionalLogic, hasBranchLogic,
+    hasKPI, hasFrequency,
   }
 }
 
-// ─── 9개 항목 채점 ────────────────────────────────────────────────
+// ─── 채점 ─────────────────────────────────────────────────────────
 function scoreAll(text: string): { details: PromptDetails; raw: number } {
   const a = analyze(text)
 
-  // ① 요구 명확도 (0–15)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // A. 기능 완성도 (0–25)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // A-1. 핵심 사용자 여정 커버리지 (0–5)
+  // 엄격 감점: 시작 트리거·완료 상태·사용자 행동 중 하나라도 없으면 최대 2점
+  let funcA1 = 0
+  {
+    let sub = 0
+    if (a.hasEntryTrigger) sub += 1          // 진입 트리거
+    if (a.hasUserAction) sub += 1             // 수행 행동
+    if (a.hasCompletionState) sub += 1        // 완료 상태
+    if (a.hasUserJourneyFlow) sub += 2        // 완전한 루프 보너스
+    // 엄격 감점: 핵심 3요소 중 빠진 것 있으면 상한 2점
+    const missingJourneyParts = (!a.hasEntryTrigger ? 1 : 0) + (!a.hasCompletionState ? 1 : 0) + (!a.hasUserAction ? 1 : 0)
+    if (missingJourneyParts >= 2) sub = Math.min(sub, 2)
+    else if (missingJourneyParts === 1) sub = Math.min(sub, 4)
+    funcA1 = Math.max(0, Math.min(5, sub))
+  }
+
+  // A-2. 핵심 기능 세트 충족도 (0–5)
+  // 강력 감점: 단순 기능 나열·기능 간 목적 불일치·결과 확인 수단 없음
+  let funcA2 = 0
+  {
+    let sub = 0
+    if (a.hasCoreAction || a.hasFuncName) sub += 1      // Core action 존재
+    if (a.hasSupportingFunc) sub += 1                    // Supporting 기능
+    if (a.hasResultCheck) sub += 1                       // 결과 확인 기능
+    if (a.hasStateManagement || a.hasDataFlow) sub += 1  // 상태 관리 기능
+    if (a.hasFuncPurpose && a.hasFuncName) sub += 1      // 기능 목적 명확
+    // 감점: 결과 확인 수단 없음
+    if (!a.hasResultCheck && !a.hasCompletionState) sub -= 1
+    // 감점: 단순 기능 나열형 (흐름 없이 키워드만)
+    if (!a.hasUserJourneyFlow && !a.hasFuncFlow && a.hasFuncName) sub -= 1
+    funcA2 = Math.max(0, Math.min(5, sub))
+  }
+
+  // A-3. 기능 간 의존성 설계 (0–5)
+  // 엄격: 단순 리스트형이면 최대 2점
+  let funcA3 = 0
+  {
+    let sub = 0
+    if (a.hasFuncFlow || a.hasDependency) sub += 2      // 기능 순서 논리성
+    if (a.hasDataFlow) sub += 2                          // 데이터 흐름 암시
+    if (a.hasBeforeAfter || a.hasResultState) sub += 1   // 상태 전이 고려
+    // 엄격: 흐름/의존성 없는 단순 리스트 → 최대 2점
+    if (!a.hasFuncFlow && !a.hasDependency && !a.hasDataFlow) sub = Math.min(sub, 2)
+    funcA3 = Math.max(0, Math.min(5, sub))
+  }
+
+  // A-4. 실제 사용 지속 가능성 Retention Readiness (0–5)
+  let funcA4 = 0
+  {
+    let sub = 0
+    if (a.hasRetentionElement) sub += 2    // 반복 사용 유도 요소
+    if (a.hasResultCheck) sub += 1          // 기록/히스토리
+    if (a.hasStateManagement) sub += 1      // 개인화/상태 유지
+    if (a.hasFrequency) sub += 1            // 피드백 루프 힌트
+    funcA4 = Math.max(0, Math.min(5, sub))
+  }
+
+  // A-5. MVP 절단 가능성 (0–5)
+  // 엄격: 올인원 슈퍼앱 느낌이면 최대 2점
+  let funcA5 = 0
+  {
+    let sub = 0
+    if (a.hasPriority) sub += 2              // 우선순위 힌트
+    if (a.hasNiceToHave) sub += 1            // Must vs Nice 구분
+    if (a.hasFuncName && a.hasPurpose) sub += 1  // 핵심 축 존재
+    if (!a.isSuperApp) sub += 1              // 기능 과포화 없음
+    // 엄격: 슈퍼앱이면 최대 2점
+    if (a.isSuperApp) sub = Math.min(sub, 2)
+    funcA5 = Math.max(0, Math.min(5, sub))
+  }
+
+  const funcCompleteness = funcA1 + funcA2 + funcA3 + funcA4 + funcA5 // 0–25
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // B. 구체성 수준 (0–25)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // B-1. 입력 정의 명확도 (0–5)
+  // 엄격: 입력 언급 없으면 최대 1점
+  let specB1 = 0
+  {
+    let sub = 0
+    if (a.hasUserAction) sub += 1              // 사용자 입력 존재
+    if (a.hasInputType) sub += 2               // 입력 타입 암시
+    if (a.hasInputValidation) sub += 1         // 입력 조건
+    if (a.hasCondition) sub += 1               // 입력 검증 힌트
+    // 엄격: 입력 언급 없으면 최대 1점
+    if (!a.hasUserAction && !a.hasInputType) sub = Math.min(sub, 1)
+    specB1 = Math.max(0, Math.min(5, sub))
+  }
+
+  // B-2. 출력/결과 명확도 (0–5)
+  // 감점: 추상 표현 사용 시
+  let specB2 = 0
+  {
+    let sub = 0
+    if (a.hasOutputScreen || a.outputFormats.length >= 1) sub += 2  // 화면/피드백 힌트
+    if (a.hasSuccessState || a.hasCompletionState) sub += 1          // 성공 상태
+    if (a.hasMeasurable || a.quantifiers.length >= 1) sub += 1       // 측정 가능 결과
+    if (a.hasSuccessCriteria) sub += 1                               // 성공 기준
+    // 감점: 추상 출력 표현
+    if (a.hasAbstractOutput && !a.hasOutputScreen) sub -= 1
+    specB2 = Math.max(0, Math.min(5, sub))
+  }
+
+  // B-3. 상태 변화 정의 (0–5) — 고급 제품 프롬프트 핵심
+  // 엄격: 상태 개념 없으면 최대 2점
+  let specB3 = 0
+  {
+    let sub = 0
+    if (a.hasBeforeAfter) sub += 2             // before/after 상태
+    if (a.hasDataFlow || a.hasStateManagement) sub += 1  // 저장/갱신 흐름
+    if (a.hasBeforeAfter && a.hasResultState) sub += 1   // 사용자 상태 변화
+    if (a.hasSystemReactionDetailed) sub += 1  // 시스템 반응 명시
+    // 엄격: 상태 변화 개념 없으면 최대 2점
+    if (!a.hasBeforeAfter && !a.hasStateManagement && !a.hasResultState) sub = Math.min(sub, 2)
+    specB3 = Math.max(0, Math.min(5, sub))
+  }
+
+  // B-4. 조건 및 규칙 명시도 (0–5)
+  // 감점: "항상", "자동으로", "적절히" 조건 없이 사용 시
+  let specB4 = 0
+  {
+    let sub = 0
+    if (a.hasCondition || a.hasConditionalLogic) sub += 2  // 실행 조건
+    if (a.hasConstraint) sub += 1                           // 예외 조건
+    if (a.hasBranchLogic) sub += 1                         // 분기 로직
+    if (a.hasPriority) sub += 1                            // 우선순위 조건
+    // 감점: 모호 조건 키워드 사용
+    const vagueConditions = (text.match(/(?:항상|자동으로(?!\s*저장|\s*갱신|\s*생성)|적절히)/g) || []).length
+    sub -= vagueConditions
+    specB4 = Math.max(0, Math.min(5, sub))
+  }
+
+  // B-5. 측정 가능 요소 포함도 (0–5) — 제품팀이 매우 중요하게 보는 부분
+  // 엄격: 측정 요소 전무 → 최대 1점
+  let specB5 = 0
+  {
+    let sub = 0
+    if (a.numbers.length >= 1) sub += 1         // 수치 존재
+    if (a.hasMeasurable) sub += 1               // 명시적 수치 기준
+    if (a.hasFrequency) sub += 1                // 빈도/주기
+    if (a.hasSuccessCriteria || a.hasKPI) sub += 1  // 성공 기준/KPI
+    if (a.quantifiers.length >= 2) sub += 1    // 다수 정량 요소
+    // 엄격: 측정 요소 전무 → 최대 1점
+    if (a.numbers.length === 0 && !a.hasMeasurable && !a.hasFrequency) sub = Math.min(sub, 1)
+    specB5 = Math.max(0, Math.min(5, sub))
+  }
+
+  const specificityScore = specB1 + specB2 + specB3 + specB4 + specB5 // 0–25
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 기존 보조 지표 (내부 로직·피드백용)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // ① 요구 명확도 (0–15) — 피드백 분기용
   let reqClarity = 0
-  // A. 작업 동사 명시성 (0–4)
   if (a.clearVerbs.length >= 1) reqClarity += 3
   else if (a.abstractVerbs.length === 0) reqClarity += 1
   if (a.abstractVerbs.length >= 2) reqClarity -= 1
-  // B. 목표 정의 수준 (0–4)
   if (a.hasPurpose) reqClarity += 3
   if (a.hasSuccessCriteria) reqClarity += 1
-  // C. 작업 범위 경계 (0–4)
   if (a.hasConstraint || a.hasCondition) reqClarity += 2
   if (a.wordCount >= 15) reqClarity += 1
-  // D. 모호 표현 밀도 (0–3)
   reqClarity += Math.max(0, 3 - a.vagueWords.length)
   reqClarity = Math.max(0, Math.min(15, reqClarity))
 
-  // ② 정보 충분성 — 강화판 (0–20)
+  // ② 정보 충분성 (0–20) — 피드백 분기용
   let infoSufficiency = 0
-  // A. 대상 정의 (0–3)
   if (a.hasTarget) infoSufficiency += 2
   if (a.hasDomain) infoSufficiency += 1
-  // B. 맥락 제공 (0–4)
   if (a.hasPurpose) infoSufficiency += 2
   if (a.hasBackground) infoSufficiency += 2
-  // C. 입력 데이터 / 예시 (0–3)
   if (a.numbers.length >= 1) infoSufficiency += 1
   if (a.wordCount >= 20) infoSufficiency += 1
   if (a.wordCount >= 40) infoSufficiency += 1
-  // D. 조건 명시 (0–3)
   if (a.hasCondition) infoSufficiency += 2
   if (a.hasConstraint) infoSufficiency += 1
-  // E. 타겟 사용자 정의 (0–7) — NEW, 매우 중요
-  if (a.hasTargetUserWho) infoSufficiency += 2   // 누구를 위한 앱인지
-  if (a.hasTargetAge) infoSufficiency += 2        // 연령대/직군
-  if (a.hasTargetPurpose) infoSufficiency += 2    // 목적/용도
-  if (a.hasTargetContext) infoSufficiency += 1    // 사용 상황/환경
+  if (a.hasTargetUserWho) infoSufficiency += 2
+  if (a.hasTargetAge) infoSufficiency += 2
+  if (a.hasTargetPurpose) infoSufficiency += 2
+  if (a.hasTargetContext) infoSufficiency += 1
   if (a.hasDuplicateInstructions) infoSufficiency = Math.max(0, infoSufficiency - 2)
   infoSufficiency = Math.max(0, Math.min(20, infoSufficiency))
 
-  // ③ 기능 요구사항 명확도 (0–20) — 초세분화 v2
+  // ③ 기능 명세 내부 보조값 (0–20) — 피드백 분기용
   let funcSpec = 0
-
-  // ③-1 행동 단위 표현도 (0–4)
-  // 동사 중심 표현, 사용자 행동 주체, 시스템 반응, 결과 상태
-  {
-    let sub = 0
-    if (a.hasActionVerb || a.clearVerbs.length >= 1) sub += 1       // 동사 중심 표현
-    if (a.hasUserAction) sub += 1                                     // 사용자 행동 주체
-    if (a.hasSystemResponse) sub += 1                                 // 시스템 반응
-    if (a.hasResultState) sub += 1                                    // 결과 상태 표현
-    // 감점: 명사 나열형이거나 추상 동사만 있으면 -1
-    if (!a.hasActionVerb && !a.hasUserAction && a.abstractVerbs.length >= 1) sub -= 1
-    funcSpec += Math.max(0, Math.min(4, sub))
-  }
-
-  // ③-2 모호 표현 밀도 (0–4): 위험 키워드가 적을수록 고점
   {
     const totalVague = a.vagueWords.length + a.vagueVerbs.length
+    if (a.hasActionVerb || a.clearVerbs.length >= 1) funcSpec += 1
+    if (a.hasUserAction) funcSpec += 1
+    if (a.hasSystemResponse) funcSpec += 1
+    if (a.hasResultState) funcSpec += 1
     if (totalVague === 0) funcSpec += 4
     else if (totalVague === 1) funcSpec += 3
     else if (totalVague === 2) funcSpec += 2
     else if (totalVague === 3) funcSpec += 1
-    // 4개 이상은 0점
+    if (a.hasFuncName) funcSpec += 1
+    if (a.hasPriority) funcSpec += 2
+    if (a.hasPriority && a.hasNiceToHave) funcSpec += 1
+    if (a.hasFuncFlow) funcSpec += 2
+    if (a.hasDataFlow) funcSpec += 2
+    if (a.hasIOSpec) funcSpec += 2
+    if (a.hasMeasurable || a.quantifiers.length >= 1) funcSpec += 1
+    funcSpec = Math.max(0, Math.min(20, funcSpec))
   }
-
-  // ③-3 핵심 기능 식별력 (0–4): MVP/우선순위 구분 여부
-  {
-    let sub = 0
-    if (a.hasFuncName) sub += 1                        // 기능 암시
-    if (a.hasPriority) sub += 2                        // 우선순위 표현
-    if (a.hasPriority && a.hasNiceToHave) sub += 1     // Must vs Nice 구분
-    funcSpec += Math.min(4, sub)
-  }
-
-  // ③-4 기능 관계 구조화 (0–4): 흐름·의존 관계·데이터 흐름
-  {
-    let sub = 0
-    if (a.hasFuncFlow) sub += 2                                     // 기능 간 순서/흐름
-    if (a.hasDataFlow) sub += 2                                     // 데이터 흐름 힌트
-    if (a.hasUserAction && a.hasSystemResponse) sub += 1            // 사용자 플로우
-    funcSpec += Math.min(4, sub)
-  }
-
-  // ③-5 구현 구체성 (0–4): 입출력·상태변화·측정 가능 요소
-  {
-    let sub = 0
-    if (a.hasIOSpec) sub += 2                          // 입력/출력 힌트
-    if (a.hasMeasurable || a.quantifiers.length >= 1) sub += 1      // 측정 가능 요소
-    if (a.hasResultState) sub += 1                     // 상태 변화 언급
-    funcSpec += Math.min(4, sub)
-  }
-
-  funcSpec = Math.max(0, Math.min(20, funcSpec))
-
-  // ④ 구체성 수준 (0–15)
-  let specificity = 0
-  specificity += Math.min(5, a.quantifiers.length * 2 + (a.numbers.length >= 1 ? 1 : 0))
-  if (a.hasSteps) specificity += 2
-  if (a.hasBullet) specificity += 2
-  specificity += Math.max(0, 3 - a.vagueWords.length)
-  specificity += Math.min(3, a.outputFormats.length)
-  if (a.hasDuplicateInstructions) specificity = Math.max(0, specificity - 1)
-  specificity = Math.max(0, Math.min(15, specificity))
 
   // ⑤ 해석 안정성 (0–10)
   let interpStability = 5
@@ -337,60 +517,45 @@ function scoreAll(text: string): { details: PromptDetails; raw: number } {
   if (a.hasBullet) structureOrg += 1
   structureOrg = Math.max(0, Math.min(10, structureOrg))
 
-  // ⑧ 코칭 반응성 (Prompt Coachability) (0–10) — 초세분화 v2
-  // "이 프롬프트를 AI가 얼마나 잘 구해줄 수 있는가"
+  // ⑧ 코칭 반응성 (0–10)
   let intentConsist = 0
-
-  // ⑧-1 의도 복원 가능성 (0–2): 부족해도 방향 추론 가능한지
   {
     let sub = 0
-    if (a.hasPurpose || a.hasBackground) sub += 1    // 목표 추론 가능
-    if (a.hasDomain || a.hasTarget) sub += 1          // 도메인/사용자 가치 힌트
-    // 의도 불명 감점
+    if (a.hasPurpose || a.hasBackground) sub += 1
+    if (a.hasDomain || a.hasTarget) sub += 1
     if (!a.hasPurpose && !a.hasBackground && !a.hasFuncName) sub -= 1
     intentConsist += Math.max(0, Math.min(2, sub))
   }
-
-  // ⑧-2 구조 보완 용이성 (0–2): AI가 PRD 구조로 재정렬 가능한지
   {
     let sub = 0
-    if (a.hasFuncName || a.hasFuncDecomp) sub += 1   // 정보 블록 존재
-    if (a.hasSteps || a.hasLineBreaks || a.hasBullet) sub += 1  // 재구조화 용이
-    if (a.hasDuplicateInstructions) sub -= 1          // 중복으로 재구조 어려움
+    if (a.hasFuncName || a.hasFuncDecomp) sub += 1
+    if (a.hasSteps || a.hasLineBreaks || a.hasBullet) sub += 1
+    if (a.hasDuplicateInstructions) sub -= 1
     intentConsist += Math.max(0, Math.min(2, sub))
   }
-
-  // ⑧-3 결손 정보 식별 가능성 (0–2): 무엇이 빠졌는지 보이는지
   {
     let sub = 0
-    // 일부 있으면 빠진 것이 더 명확히 보임 (아무것도 없으면 뭐가 빠진지도 모름)
-    if (a.hasPurpose && !a.hasBackground) sub += 1   // 목적은 있는데 배경 누락 → 명확
-    if (a.hasFuncName && !a.hasUserAction) sub += 1   // 기능명은 있는데 인터랙션 누락 → 명확
-    if (a.hasTarget && !a.hasTargetContext) sub += 1  // 대상은 있는데 맥락 누락 → 명확
+    if (a.hasPurpose && !a.hasBackground) sub += 1
+    if (a.hasFuncName && !a.hasUserAction) sub += 1
+    if (a.hasTarget && !a.hasTargetContext) sub += 1
     sub = Math.min(2, sub)
-    // 아무것도 없으면 뭐가 빠졌는지도 불명
     if (!a.hasPurpose && !a.hasFuncName && !a.hasTarget) sub = 0
     intentConsist += sub
   }
-
-  // ⑧-4 MVP 추출 가능성 (0–2): 핵심 기능 잘라낼 수 있는지
   {
     let sub = 0
-    if (a.hasPriority) sub += 1                      // 기능 집중도 있음
-    if (a.hasFuncName && a.hasFuncPurpose) sub += 1  // 범위 응집도
-    if (!a.hasPriority && a.hasFuncName && a.wordCount > 30) sub -= 1  // 올인원 나열 감점
+    if (a.hasPriority) sub += 1
+    if (a.hasFuncName && a.hasFuncPurpose) sub += 1
+    if (!a.hasPriority && a.hasFuncName && a.wordCount > 30) sub -= 1
     intentConsist += Math.max(0, Math.min(2, sub))
   }
-
-  // ⑧-5 AI 구체화 용이성 (0–2): AI가 살을 붙이기 쉬운지
   {
     let sub = 0
-    if (a.wordCount >= 15 && a.wordCount <= 120) sub += 1   // 의미 밀도 적정
-    if (!a.toneConflict && !a.scopeConflict) sub += 1        // 문장 명료도
-    if (a.toneConflict || a.scopeConflict || a.hasDuplicateInstructions) sub -= 1  // AI 해석 부담
+    if (a.wordCount >= 15 && a.wordCount <= 120) sub += 1
+    if (!a.toneConflict && !a.scopeConflict) sub += 1
+    if (a.toneConflict || a.scopeConflict || a.hasDuplicateInstructions) sub -= 1
     intentConsist += Math.max(0, Math.min(2, sub))
   }
-
   intentConsist = Math.max(0, Math.min(10, intentConsist))
 
   // ⑨ 보정치 (−5~+10)
@@ -400,31 +565,85 @@ function scoreAll(text: string): { details: PromptDetails; raw: number } {
   if (a.hasSteps) bonus += 2
   if (a.hasConstraint) bonus += 1
   if (a.hasSuccessCriteria) bonus += 2
-  if (a.hasTargetUserWho && a.hasTargetPurpose) bonus += 1  // 타겟+목적 동시 만족
-  if (a.hasUserAction && a.hasSystemResponse) bonus += 1    // 인터랙션 양방향
+  if (a.hasTargetUserWho && a.hasTargetPurpose) bonus += 1
+  if (a.hasUserAction && a.hasSystemResponse) bonus += 1
   if (a.isOverlyVerbose) bonus -= 2
   if (a.hasDuplicateInstructions) bonus -= 2
   if (a.vagueWords.length >= 4) bonus -= 1
   bonus = Math.max(-5, Math.min(10, bonus))
 
-  // raw max = 15+20+20+15+10+15+10+10+10 = 125
-  const raw = reqClarity + infoSufficiency + funcSpec + specificity + interpStability + executability + structureOrg + intentConsist + bonus
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 🚨 Ultra Strict 감점 가드 (AI 점수 퍼주기 방지)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  let ultraPenalty = 0
+
+  // Rule 1: 모호 표현 3개 이상 → −5점
+  const totalVagueAll = a.vagueWords.length + a.vagueVerbs.length
+  if (totalVagueAll >= 3) ultraPenalty -= 5
+
+  // Rule 2: 올인원 슈퍼앱 (로그인+채팅+추천+커뮤니티+AI 동시) → −4점
+  if (a.isSuperApp) ultraPenalty -= 4
+
+  // Rule 3: 사용자(타겟) 완전 미정의 → 구체성 점수 상한 12점 제한 (별도 캡 적용)
+  const specCapByNoTarget = !a.hasTargetUserWho && !a.hasTarget && !a.hasDomain
+
+  // Rule 4: 실행 트리거 없음 → 기능 완성도 상한 18점 제한 (별도 캡 적용)
+  const funcCapByNoTrigger = !a.hasEntryTrigger && !a.hasConditionalLogic && !a.hasUserJourneyFlow
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // raw 합산
+  // A(25) + B(25) + 보조지표(reqClarity15 + infoSufficiency20 + interpStability10
+  //                          + executability15 + structureOrg10 + intentConsist10)
+  //                          + bonus(10) = 140 (보조 지표는 피드백 분기용이며 raw에서 1/3 가중)
+  // 실제 raw 설계: A + B가 핵심(50) + 보조지표 절반 + bonus
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // 보조 지표는 0.4 가중치로 합산 (총 raw max ≈ 100)
+  const supportRaw = Math.round(
+    (reqClarity + infoSufficiency + interpStability + executability + structureOrg + intentConsist) * 0.4
+  )
+  // A + B + support + bonus = 25+25+~32+10 = raw max ≈ 92
+  let raw = funcCompleteness + specificityScore + supportRaw + bonus
+
+  // Rule 3 캡: 타겟 미정의 시 specificityScore를 12점 이하로
+  if (specCapByNoTarget) {
+    const cappedSpec = Math.min(specificityScore, 12)
+    raw = raw - specificityScore + cappedSpec
+  }
+
+  // Rule 4 캡: 실행 트리거 없으면 funcCompleteness를 18점 이하로
+  if (funcCapByNoTrigger) {
+    const cappedFunc = Math.min(funcCompleteness, 18)
+    raw = raw - funcCompleteness + cappedFunc
+  }
+
+  // Rule 1, 2 감점 적용
+  raw += ultraPenalty
 
   return {
-    details: { reqClarity, infoSufficiency, funcSpec, specificity, interpStability, executability, structureOrg, intentConsist, bonus },
+    details: {
+      funcCompleteness, funcA1, funcA2, funcA3, funcA4, funcA5,
+      specificityScore, specB1, specB2, specB3, specB4, specB5,
+      reqClarity, infoSufficiency, funcSpec,
+      interpStability, executability, structureOrg, intentConsist,
+      bonus, ultraPenalty,
+    },
     raw,
   }
 }
 
 // ─── 최종 점수 계산 ───────────────────────────────────────────────
-// raw max = 15+20+20+15+10+15+10+10+10 = 125
-// 기준치: 평균 raw ≈ 45 (엄격화된 기준 반영)
-// final = clamp(round(raw / 125 * 100), 0, 100)
-// 단, raw ≤ 20 이면 무조건 20점 이하로 상한 제한 (저품질 프롬프트 엄격 처리)
+// raw max ≈ 92  (A25 + B25 + support~32 + bonus10)
+// 평균 raw: 기능 나열형 ≈ 25–35, MVP 가능 ≈ 45–55, 개발 명세 근접 ≈ 65+
+// final = clamp(round(raw / 92 * 100), 0, 100)
+// 저품질 상한 제한으로 점수 퍼주기 방지
 function calcFinalScore(raw: number): number {
-  const scaled = Math.round((raw / 125) * 100)
-  if (raw <= 20) return Math.min(scaled, 20)
-  if (raw <= 35) return Math.min(scaled, 40)
+  const MAX_RAW = 92
+  const scaled = Math.round((raw / MAX_RAW) * 100)
+  // 저품질 구간 상한 제한
+  if (raw <= 18) return Math.min(scaled, 20)   // 아이디어 묶음
+  if (raw <= 30) return Math.min(scaled, 38)   // 기능 나열형
+  if (raw <= 42) return Math.min(scaled, 58)   // MVP 가능 하한
   return Math.max(0, Math.min(100, scaled))
 }
 
@@ -439,15 +658,15 @@ function classifyTypes(d: PromptDetails, a: ReturnType<typeof analyze>): Problem
   if (d.reqClarity <= 6 && !a.hasPurpose) types.push({ type: 'A', weight: 3 })
   else if (d.reqClarity <= 9) types.push({ type: 'A', weight: 1 })
 
-  // TYPE_B: 기능 부족형 (funcSpec 상한 20으로 조정)
-  if (d.funcSpec <= 5 && !a.hasFuncName) types.push({ type: 'B', weight: 3 })
-  else if (d.funcSpec <= 11) types.push({ type: 'B', weight: 1 })
+  // TYPE_B: 기능 부족형 — A + B 합산 기준
+  if (d.funcCompleteness <= 8 && !a.hasFuncName) types.push({ type: 'B', weight: 3 })
+  else if (d.funcCompleteness <= 14 || d.funcSpec <= 11) types.push({ type: 'B', weight: 1 })
 
   // TYPE_C: 맥락 부족형 (타겟 사용자 포함)
   if (!a.hasTargetUserWho && d.infoSufficiency <= 8) types.push({ type: 'C', weight: 3 })
   else if (d.infoSufficiency <= 12) types.push({ type: 'C', weight: 1 })
 
-  // TYPE_D: 과도한 모호 표현형 (vagueVerbs 추가 반영)
+  // TYPE_D: 과도한 모호 표현형
   const totalVague = a.vagueWords.length + (a.vagueVerbs?.length ?? 0)
   if (totalVague >= 3 && d.interpStability <= 5) types.push({ type: 'D', weight: 2 })
   else if (totalVague >= 2) types.push({ type: 'D', weight: 1 })
@@ -455,8 +674,8 @@ function classifyTypes(d: PromptDetails, a: ReturnType<typeof analyze>): Problem
   // TYPE_E: 구조 미흡형
   if (d.structureOrg <= 3 && d.executability <= 5) types.push({ type: 'E', weight: 2 })
 
-  // TYPE_F: 거의 완성형 (기준 엄격화: funcSpec 기준 상향)
-  if (d.reqClarity >= 11 && d.infoSufficiency >= 14 && d.funcSpec >= 14 && d.intentConsist >= 7) types.push({ type: 'F', weight: 3 })
+  // TYPE_F: 거의 완성형 (A+B 기준 엄격화)
+  if (d.funcCompleteness >= 18 && d.specificityScore >= 18 && d.reqClarity >= 11 && d.intentConsist >= 7) types.push({ type: 'F', weight: 3 })
 
   // TYPE_G: 충돌/모순 포함형
   if (a.toneConflict || a.scopeConflict || a.hasDuplicateInstructions) types.push({ type: 'G', weight: 3 })
@@ -585,7 +804,7 @@ function buildFeedback(
       secondPart.push('비슷한 지시가 반복되면 코칭 반응성이 크게 낮아집니다. 중복된 요구를 하나로 통합하면 AI가 훨씬 일관된 결과를 냅니다.')
     // 코칭 반응성 낮을 때 추가 코칭
     if (d.intentConsist <= 3)
-      secondPart.push('코칭 반응성 점수가 낮습니다. 의도를 추론할 수 있는 맥락(목적·배경·타겟)이 부족해 AI가 이 프롬프트를 PRD 구조로 재정렬하기 어렵습니다. 프롬프트 전체를 재작성하는 것을 권장합니다.')
+      secondPart.push('코칭 반응성 점수가 낮습니다. 의도를 추론할 수 있는 맥락(목적·배���·타겟)이 부족해 AI가 이 프롬프트를 PRD 구조로 재정렬하기 어렵습니다. 프롬프트 전체를 재작성하는 것을 권장합니다.')
   }
 
   if (secondPart.length > 0) {
@@ -638,20 +857,40 @@ function buildStrengthsWeaknesses(d: PromptDetails, a: ReturnType<typeof analyze
   if (!a.hasBackground && d.infoSufficiency <= 12)
     weaknesses.push('요청 배경이 없어 AI가 맥락을 임의로 가정해야 합니다. 왜 이것이 필요한지, 어떤 상황에서 쓰이는지 한 문장이라도 추가해보세요.')
 
-  // ③ 기능 요구사항 명확도 (초세분화 v2 기준)
-  if (d.funcSpec <= 5) {
-    // 0–6: 아이디어 나열 단계
-    weaknesses.push('기능 설명이 아이디어 나열 수준에 머물러 있습니다. "사용자가 ~하면 → 시스템이 ~한다"처럼 행동·반응·결과 상태를 흐름으로 작성해야 AI가 실제 설계를 할 수 있습니다.')
-  } else if (d.funcSpec <= 11) {
-    // 7–12: 기능 정의 초기
-    if (!a.hasPriority)
-      weaknesses.push('기능들이 동일 가중치로 나열되어 있습니다. "핵심(MVP)", "선택적" 등 우선순위를 표시하면 AI가 어떤 기능부터 구현해야 할지 파악할 수 있습니다.')
+  // A. 기능 완성도 약점
+  if (d.funcCompleteness <= 8) {
+    weaknesses.push('기능 설명이 아이디어 묶음 수준입니다. 진입(앱을 열면)→수행(사용자가 ~하면)→완료(저장되고 목록에 표시된다)의 3단계 여정을 갖춰야 AI가 실제 설계를 합니다.')
+  } else if (d.funcCompleteness <= 15) {
+    if (d.funcA1 <= 2)
+      weaknesses.push('사용자 여정이 불완전합니다. 앱의 시작 트리거와 완료 상태(결과 화면, 저장 확인)를 명시해야 AI가 첫 화면부터 마지막 화면까지 설계할 수 있습니다.')
+    if (d.funcA3 <= 2)
+      weaknesses.push('기능들이 독립적으로 나열되어 있습니다. "로그인 후 대시보드 진입 → 기록 탭 선택 → 차트 표시"처럼 기능 간 순서와 의존 관계를 작성해보세요.')
+    if (d.funcA5 <= 2 && !a.hasPriority)
+      weaknesses.push('MVP로 잘라낼 핵심 기능 축이 보이지 않습니다. "핵심 기능"과 "추후 추가" 기능을 구분해주면 AI가 최소 동작 버전부터 설계합니다.')
+  } else if (d.funcCompleteness <= 20) {
+    if (d.funcA4 <= 2)
+      weaknesses.push('한 번 쓰고 끝나는 앱 구조에 가깝습니다. 알림, 기록, 개인화, 반복 사용 유도 요소를 하나라도 추가하면 리텐션 가능한 제품 구조가 됩니다.')
+  }
+
+  // B. 구체성 수준 약점
+  if (d.specificityScore <= 8) {
+    weaknesses.push('구체성이 추상 아이디어 수준에 머물러 있습니다. 수치(몇 개, 몇 초), 입력 타입(텍스트/날짜/파일), 출력 화면(목록/차트/모달) 중 하나라도 명시해보세요.')
+  } else if (d.specificityScore <= 15) {
+    if (d.specB3 <= 2)
+      weaknesses.push('상태 변화 정의가 없습니다. "사용자가 저장 버튼을 누르면 목록이 갱신된다"처럼 before/after 상태 변화가 있어야 AI가 데이터 설계를 할 수 있습니다.')
+    if (d.specB5 <= 1)
+      weaknesses.push('측정 가능한 요소가 전무합니다. "최대 3초 내 응답", "목록 최소 10개 표시" 같은 수치 기준이 없으면 AI가 임의로 구현 수준을 결정합니다.')
+  } else if (d.specificityScore <= 20) {
+    if (d.specB4 <= 2)
+      weaknesses.push('조건과 예외 처리가 부족합니다. "데이터가 없을 경우 빈 상태 메시지 표시", "로그인하지 않으면 게스트 모드로 진입"처럼 분기 로직을 추가해보세요.')
+  }
+
+  // ③ 기능 명세 내부 보조 약점 (기존 유지, funcSpec 기준)
+  if (d.funcSpec <= 5 && d.funcCompleteness <= 10) {
+    // 이미 위에서 커버했으므로 생략
+  } else if (d.funcSpec <= 11 && d.funcCompleteness > 10) {
     if (!a.hasDataFlow)
-      weaknesses.push('기능 간 데이터 흐름(입력→저장→표시, 기록→통계 등)이 없습니다. 데이터가 어떻게 이동하는지 한 줄이라도 서술해보세요.')
-  } else if (d.funcSpec <= 15) {
-    // 13–16: MVP 설계 가능
-    if (!a.hasIOSpec && !a.hasMeasurable)
-      weaknesses.push('기능 구조는 갖춰졌지만 입출력 명세나 수치 기준이 없어 개발 명세 수준까지는 아직 부족합니다. 측정 가능한 조건(예: "최대 3초 내 응답", "최소 5개 항목 표시")을 추가해보세요.')
+      weaknesses.push('기능 간 데이터 흐름(입력→저장→표시, 기록→통계 등)이 명시되지 않았습니다.')
   }
 
   // ④ 구체성
@@ -670,7 +909,7 @@ function buildStrengthsWeaknesses(d: PromptDetails, a: ReturnType<typeof analyze
   if (d.executability <= 5)
     weaknesses.push('AI가 어디서 시작하고 어디서 멈춰야 하는지 판단하기 어렵습니다. 작업을 단계별로 나누거나 우선순위를 명시해보세요.')
 
-  // ⑦ 구조 조직력
+  // �� 구조 조직력
   if (d.structureOrg <= 3)
     weaknesses.push('하나의 긴 문장에 모든 요구사항이 섞여 있습니다. 조건·배경·요청을 분리해서 작성하면 AI가 더 정확하게 이해합니다.')
 
@@ -703,10 +942,16 @@ export function evaluatePrompt(prompt: string, _topic: string): EvaluationResult
     return {
       promptScore: 0,
       feedback,
-      promptDetails: { reqClarity: 0, infoSufficiency: 0, funcSpec: 0, specificity: 0, interpStability: 0, executability: 0, structureOrg: 0, intentConsist: 0, bonus: 0 },
+      promptDetails: {
+        funcCompleteness: 0, funcA1: 0, funcA2: 0, funcA3: 0, funcA4: 0, funcA5: 0,
+        specificityScore: 0, specB1: 0, specB2: 0, specB3: 0, specB4: 0, specB5: 0,
+        reqClarity: 0, infoSufficiency: 0, funcSpec: 0,
+        interpStability: 0, executability: 0, structureOrg: 0, intentConsist: 0,
+        bonus: 0, ultraPenalty: 0,
+      },
       strengths: [],
       weaknesses: [
-        '프롬프트는 AI��게 작업을 지시하는 문장이어야 합니다.',
+        '프롬프트는 AI에게 작업을 지시하는 문장이어야 합니다.',
         '예: "~앱을 만들어줘", "~를 분석해줘", "~를 요약해줘"처럼 명확한 지시를 작성하세요.',
         '노래 가사, 일상 대화, 단순 감탄사는 0점 처리됩니다.',
       ],
