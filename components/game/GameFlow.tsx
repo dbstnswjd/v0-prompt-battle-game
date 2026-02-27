@@ -5,7 +5,6 @@ import { PhoneInput } from './PhoneInput'
 import { TopicGeneration } from './TopicGeneration'
 import { PromptWriting } from './PromptWriting'
 import { Evaluating } from './Evaluating'
-import { RoundEvaluation } from './RoundEvaluation'
 import { FinalResults } from './FinalResults'
 import { generateRandomTopic } from '@/lib/topic-generator'
 import { evaluatePrompt } from '@/lib/prompt-evaluator'
@@ -15,7 +14,6 @@ export function GameFlow() {
   const [stage, setStage] = useState<GameStage>('phone')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [round1, setRound1] = useState<RoundData | null>(null)
-  const [round2, setRound2] = useState<RoundData | null>(null)
   const [currentTopic, setCurrentTopic] = useState('')
 
   // Use ref to avoid stale closure issues in setTimeout callbacks
@@ -31,7 +29,6 @@ export function GameFlow() {
         body: JSON.stringify({ phone_number: phone }),
       })
       const json = await res.json()
-      console.log('[v0] Create session API response:', json)
 
       if (!res.ok || !json.session_id) {
         console.error('[v0] Failed to create session:', json.error)
@@ -47,7 +44,7 @@ export function GameFlow() {
   }
 
   // Save round score via API route
-  const saveToSupabase = async (roundData: RoundData, roundNumber: number) => {
+  const saveToSupabase = async (roundData: RoundData) => {
     const currentSessionId = sessionIdRef.current
     const currentPhone = phoneRef.current
 
@@ -62,12 +59,11 @@ export function GameFlow() {
         body: JSON.stringify({
           session_id: currentSessionId,
           phone_number: currentPhone,
-          round_number: roundNumber,
+          round_number: 1,
           score: roundData.totalScore,
         }),
       })
       const json = await res.json()
-      console.log('[v0] Save score API response:', json)
 
       if (!res.ok) {
         console.error('[v0] Failed to save score:', json.error)
@@ -88,8 +84,7 @@ export function GameFlow() {
   // Topic generated
   const handleTopicGenerated = (topic: string) => {
     setCurrentTopic(topic)
-    if (stage === 'topic-1') setStage('writing-1')
-    else if (stage === 'topic-2') setStage('writing-2')
+    setStage('writing-1')
   }
 
   // Change topic locally
@@ -99,8 +94,7 @@ export function GameFlow() {
 
   // Submit prompt -> evaluate locally
   const handlePromptSubmit = (prompt: string) => {
-    const isRound1 = stage === 'writing-1'
-    setStage(isRound1 ? 'evaluating-1' : 'evaluating-2')
+    setStage('evaluating-1')
 
     // Simulate brief loading for UX, then evaluate locally
     setTimeout(() => {
@@ -120,22 +114,11 @@ export function GameFlow() {
         weaknesses: evaluation.weaknesses,
       }
 
-      if (isRound1) {
-        setRound1(roundData)
-        saveToSupabase(roundData, 1)
-        setStage('evaluation-1')
-      } else {
-        setRound2(roundData)
-        saveToSupabase(roundData, 2)
-        setStage('evaluation-2')
-      }
+      setRound1(roundData)
+      saveToSupabase(roundData)
+      setStage('results')
     }, 2000)
   }
-
-  // Round 1 evaluation -> continue or skip
-  const handleContinueToRound2 = () => setStage('topic-2')
-  const handleSkipToResults = () => setStage('results')
-  const handleViewResults = () => setStage('results')
 
   // Restart
   const handleRestart = () => {
@@ -144,7 +127,6 @@ export function GameFlow() {
     sessionIdRef.current = null
     phoneRef.current = ''
     setRound1(null)
-    setRound2(null)
     setCurrentTopic('')
   }
 
@@ -153,53 +135,31 @@ export function GameFlow() {
       return <PhoneInput onSubmit={handlePhoneSubmit} />
 
     case 'topic-1':
-    case 'topic-2':
       return (
         <TopicGeneration
-          roundNumber={stage === 'topic-1' ? 1 : 2}
+          roundNumber={1}
           onTopicGenerated={handleTopicGenerated}
         />
       )
 
     case 'writing-1':
-    case 'writing-2':
       return (
         <PromptWriting
           topic={currentTopic}
-          roundNumber={stage === 'writing-1' ? 1 : 2}
+          roundNumber={1}
           onChangeTopic={handleChangeTopic}
           onSubmit={handlePromptSubmit}
         />
       )
 
     case 'evaluating-1':
-    case 'evaluating-2':
       return <Evaluating />
-
-    case 'evaluation-1':
-      return (
-        <RoundEvaluation
-          roundNumber={1}
-          roundData={round1!}
-          onContinue={handleContinueToRound2}
-          onSkip={handleSkipToResults}
-        />
-      )
-
-    case 'evaluation-2':
-      return (
-        <RoundEvaluation
-          roundNumber={2}
-          roundData={round2!}
-          onViewResults={handleViewResults}
-        />
-      )
 
     case 'results':
       return (
         <FinalResults
           round1={round1!}
-          round2={round2}
+          round2={null}
           sessionId={sessionIdRef.current}
           onRestart={handleRestart}
         />
