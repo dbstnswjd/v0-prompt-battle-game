@@ -5,6 +5,7 @@ import { PhoneInput } from './PhoneInput'
 import { PromptWriting } from './PromptWriting'
 import { Evaluating } from './Evaluating'
 import { FinalResults } from './FinalResults'
+import { BGMPlayer } from './BGMPlayer'
 import { evaluatePrompt } from '@/lib/prompt-evaluator'
 import type { RoundData, GameStage } from '@/lib/game-types'
 
@@ -110,31 +111,45 @@ export function GameFlow() {
     setRoundData(null)
   }
 
-  switch (stage) {
-    case 'phone':
-      return <PhoneInput onSubmit={handlePhoneSubmit} />
+  const bgmTrack = stage === 'phone' ? 'lobby'
+    : stage === 'writing' ? 'writing'
+    : stage === 'evaluating' ? 'evaluating'
+    : 'results' as const
 
-    case 'writing':
-      return (
-        <PromptWriting
-          roundNumber={1}
-          onSubmit={handlePromptSubmit}
-        />
-      )
+  const renderStage = () => {
+    switch (stage) {
+      case 'phone':
+        return <PhoneInput onSubmit={handlePhoneSubmit} />
 
-    case 'evaluating':
-      return <Evaluating />
+      case 'writing':
+        return (
+          <PromptWriting
+            roundNumber={1}
+            onSubmit={handlePromptSubmit}
+          />
+        )
 
-    case 'results':
-      return (
-        <FinalResults
-          roundData={roundData!}
-          sessionId={sessionIdRef.current}
-          onRestart={handleRestart}
-        />
-      )
+      case 'evaluating':
+        return <Evaluating />
 
-    default:
-      return null
+      case 'results':
+        return (
+          <FinalResults
+            roundData={roundData!}
+            sessionId={sessionIdRef.current}
+            onRestart={handleRestart}
+          />
+        )
+
+      default:
+        return null
+    }
   }
+
+  return (
+    <>
+      <BGMPlayer track={bgmTrack} />
+      {renderStage()}
+    </>
+  )
 }

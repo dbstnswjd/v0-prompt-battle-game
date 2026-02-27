@@ -135,20 +135,16 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       const params = new URLSearchParams()
       if (sessionId) params.set('session_id', sessionId)
       const url = `/api/game/ranking?${params.toString()}`
-      console.log('[v0] Fetching ranking:', url)
       const res = await fetch(url)
       const json = await res.json()
-      console.log('[v0] Ranking response:', res.status, json)
       if (res.ok) {
         setRankings(json.rankings || [])
         setMyRank(json.my_rank || null)
         setTotalPlayers(json.total_players || 0)
         setRankingFetched(true)
-      } else {
-        console.error('[v0] Ranking API error:', json)
       }
-    } catch (e) {
-      console.error('[v0] Failed to fetch ranking:', e)
+    } catch {
+      // silently fail
     } finally {
       setRankingLoading(false)
     }
@@ -177,6 +173,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       canvas.height = 1920
       const ctx = canvas.getContext('2d')!
 
+      // Background
       const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920)
       bgGrad.addColorStop(0, '#1e1033')
       bgGrad.addColorStop(0.5, '#2d1b69')
@@ -184,6 +181,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       ctx.fillStyle = bgGrad
       ctx.fillRect(0, 0, 1080, 1920)
 
+      // Decorative circles
       ctx.globalAlpha = 0.08
       ctx.beginPath()
       ctx.arc(200, 400, 300, 0, Math.PI * 2)
@@ -195,51 +193,145 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       ctx.fill()
       ctx.globalAlpha = 1
 
+      // Title
       ctx.textAlign = 'center'
       ctx.fillStyle = '#a78bfa'
       ctx.font = 'bold 48px sans-serif'
-      ctx.fillText('PROMPT BATTLE', 540, 500)
+      ctx.fillText('PROMPT BATTLE', 540, 440)
 
-      const scoreGrad = ctx.createLinearGradient(390, 650, 690, 1050)
+      // Score circle
+      const scoreGrad = ctx.createLinearGradient(390, 550, 690, 950)
       scoreGrad.addColorStop(0, '#8b5cf6')
       scoreGrad.addColorStop(1, '#d946ef')
       ctx.beginPath()
-      ctx.arc(540, 850, 200, 0, Math.PI * 2)
+      ctx.arc(540, 750, 180, 0, Math.PI * 2)
       ctx.strokeStyle = scoreGrad
       ctx.lineWidth = 12
       ctx.stroke()
 
       ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 140px sans-serif'
-      ctx.fillText(`${finalScore}`, 540, 890)
-      ctx.font = 'bold 36px sans-serif'
+      ctx.font = 'bold 120px sans-serif'
+      ctx.fillText(`${finalScore}`, 540, 785)
+      ctx.font = 'bold 32px sans-serif'
       ctx.fillStyle = '#c4b5fd'
-      ctx.fillText('SCORE', 540, 945)
+      ctx.fillText('SCORE', 540, 835)
 
-      ctx.font = 'bold 72px sans-serif'
+      // Grade
+      ctx.font = 'bold 64px sans-serif'
       ctx.fillStyle = '#fbbf24'
-      ctx.fillText(grade, 540, 1130)
+      ctx.fillText(grade, 540, 1020)
 
-      if (myRank) {
-        ctx.font = 'bold 42px sans-serif'
+      // Ranking section
+      if (myRank && totalPlayers > 0) {
+        // Rank badge background
+        const rankBoxY = 1080
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.1)'
+        ctx.beginPath()
+        ctx.roundRect(290, rankBoxY, 500, 120, 24)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.roundRect(290, rankBoxY, 500, 120, 24)
+        ctx.stroke()
+
+        // Trophy icon (text fallback)
+        ctx.font = '40px sans-serif'
+        ctx.fillText('\uD83C\uDFC6', 370, rankBoxY + 72)
+
+        // Rank text
+        ctx.textAlign = 'center'
+        ctx.font = 'bold 28px sans-serif'
+        ctx.fillStyle = '#fde68a'
+        ctx.fillText('나의 순위', 540, rankBoxY + 45)
+        ctx.font = 'bold 48px sans-serif'
         ctx.fillStyle = '#fbbf24'
-        ctx.fillText(`${myRank}위 / ${totalPlayers}명`, 540, 1220)
+        ctx.fillText(`${myRank}위`, 490, rankBoxY + 95)
+        ctx.font = '28px sans-serif'
+        ctx.fillStyle = '#fde68a80'
+        ctx.fillText(`/ ${totalPlayers}명`, 600, rankBoxY + 95)
       }
 
-      const detailY = myRank ? 1320 : 1280
-      ctx.font = '36px sans-serif'
-      ctx.fillStyle = '#e2d9f3'
-      ctx.fillText(`아이디어  ${roundData.ideaScore}점  |  프롬프트  ${roundData.promptScore}점`, 540, detailY)
+      // Score breakdown
+      const breakdownY = myRank ? 1280 : 1180
+      ctx.textAlign = 'center'
 
+      // Idea score box
+      ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'
+      ctx.beginPath()
+      ctx.roundRect(120, breakdownY, 400, 100, 20)
+      ctx.fill()
+      ctx.font = '28px sans-serif'
+      ctx.fillStyle = '#c4b5fd'
+      ctx.fillText('아이디어', 320, breakdownY + 40)
+      ctx.font = 'bold 36px sans-serif'
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(`${roundData.ideaScore}점`, 320, breakdownY + 80)
+
+      // Prompt score box
+      ctx.fillStyle = 'rgba(217, 70, 239, 0.15)'
+      ctx.beginPath()
+      ctx.roundRect(560, breakdownY, 400, 100, 20)
+      ctx.fill()
+      ctx.font = '28px sans-serif'
+      ctx.fillStyle = '#e9b5f6'
+      ctx.fillText('프롬프트', 760, breakdownY + 40)
+      ctx.font = 'bold 36px sans-serif'
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(`${roundData.promptScore}점`, 760, breakdownY + 80)
+
+      // Top 3 ranking preview (if available)
+      if (rankings.length > 0) {
+        const topY = breakdownY + 150
+        ctx.fillStyle = 'rgba(255,255,255,0.04)'
+        ctx.beginPath()
+        ctx.roundRect(140, topY, 800, Math.min(rankings.length, 5) * 60 + 50, 20)
+        ctx.fill()
+
+        ctx.font = 'bold 24px sans-serif'
+        ctx.fillStyle = '#a78bfa'
+        ctx.fillText('RANKING', 540, topY + 35)
+
+        const medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49']
+        const top = rankings.slice(0, 5)
+        top.forEach((entry, i) => {
+          const rowY = topY + 65 + i * 55
+          const rowBg = entry.isMe ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)'
+          ctx.fillStyle = rowBg
+          ctx.beginPath()
+          ctx.roundRect(180, rowY - 18, 720, 48, 12)
+          ctx.fill()
+
+          ctx.textAlign = 'left'
+          ctx.font = '24px sans-serif'
+          ctx.fillStyle = '#ffffff'
+          const prefix = i < 3 ? medals[i] : `${entry.rank}.`
+          ctx.fillText(prefix, 200, rowY + 10)
+
+          const name = entry.isMe ? 'ME' : `\uCC38\uAC00\uC790 ${entry.rank}`
+          ctx.font = entry.isMe ? 'bold 24px sans-serif' : '24px sans-serif'
+          ctx.fillStyle = entry.isMe ? '#c4b5fd' : '#e2d9f3'
+          ctx.fillText(name, 270, rowY + 10)
+
+          ctx.textAlign = 'right'
+          ctx.font = 'bold 24px sans-serif'
+          ctx.fillStyle = '#ffffff'
+          ctx.fillText(`${entry.score}점`, 860, rowY + 10)
+          ctx.textAlign = 'center'
+        })
+      }
+
+      // Footer
+      ctx.textAlign = 'center'
       ctx.font = '28px sans-serif'
       ctx.fillStyle = '#7c6faa'
-      ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1700)
+      ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1770)
       ctx.font = '24px sans-serif'
-      ctx.fillText('AI가 판단한다.', 540, 1750)
+      ctx.fillText('AI가 판단한다.', 540, 1810)
 
       canvas.toBlob((blob) => resolve(blob!), 'image/png')
     })
-  }, [finalScore, grade, roundData.ideaScore, roundData.promptScore, myRank, totalPlayers])
+  }, [finalScore, grade, roundData.ideaScore, roundData.promptScore, myRank, totalPlayers, rankings])
 
   // Download share image
   const handleDownloadImage = useCallback(async () => {
