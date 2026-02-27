@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Trophy, RotateCcw, CheckCircle, XCircle, Sparkles, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
@@ -63,6 +63,7 @@ function getRankBg(rank: number, isMe: boolean) {
 }
 
 export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: FinalResultsProps) {
+  const captureRef = useRef<HTMLDivElement>(null)
   const [animatedScore, setAnimatedScore] = useState(0)
   const [showDetails, setShowDetails] = useState(false)
   const [shareMessage, setShareMessage] = useState('')
@@ -361,6 +362,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
       <motion.div
+        ref={captureRef}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-2xl w-full"
@@ -673,7 +675,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 ) : (
                   <>
                     <Download className="w-5 h-5" />
-                    <span>공유용 이미지 저장하기</span>
+                    <span>공유용 이미지 저��하기</span>
                   </>
                 )}
               </motion.button>

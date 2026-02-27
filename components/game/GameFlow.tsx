@@ -114,7 +114,6 @@ export function GameFlow() {
       case 'writing':
         return (
           <PromptWriting
-            key={phoneRef.current}
             roundNumber={1}
             onSubmit={handlePromptSubmit}
           />
