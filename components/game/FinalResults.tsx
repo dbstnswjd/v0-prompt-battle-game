@@ -179,15 +179,25 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
     if (downloading || !captureRef.current) return
     setDownloading(true)
     try {
+      console.log('[v0] html2canvas start, ref:', !!captureRef.current)
       const html2canvas = (await import('html2canvas')).default
+      console.log('[v0] html2canvas loaded')
       const canvas = await html2canvas(captureRef.current, {
-        backgroundColor: null,
+        backgroundColor: '#1e1033',
         scale: 2,
         useCORS: true,
+        allowTaint: true,
         logging: false,
+        removeContainer: true,
       })
+      console.log('[v0] canvas rendered, size:', canvas.width, canvas.height)
       canvas.toBlob((blob) => {
-        if (!blob) return
+        console.log('[v0] blob:', blob?.size)
+        if (!blob) {
+          setShareMessage('이미지 생성에 실패했습니다.')
+          setTimeout(() => setShareMessage(''), 2000)
+          return
+        }
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -199,7 +209,8 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
         setShareMessage('이미지가 저장되었습니다!')
         setTimeout(() => setShareMessage(''), 2000)
       }, 'image/png')
-    } catch {
+    } catch (e) {
+      console.log('[v0] html2canvas error:', e)
       setShareMessage('이미지 생성에 실패했습니다.')
       setTimeout(() => setShareMessage(''), 2000)
     } finally {
