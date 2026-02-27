@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { Trophy, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp, Download } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Trophy, RotateCcw, CheckCircle, XCircle, Sparkles, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
@@ -63,6 +63,7 @@ function getRankBg(rank: number, isMe: boolean) {
 }
 
 export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: FinalResultsProps) {
+  const captureRef = useRef<HTMLDivElement>(null)
   const [animatedScore, setAnimatedScore] = useState(0)
   const [showDetails, setShowDetails] = useState(false)
   const [shareMessage, setShareMessage] = useState('')
@@ -140,10 +141,8 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
       const params = new URLSearchParams()
       if (phoneNumber) params.set('phone', phoneNumber)
       const url = `/api/game/ranking?${params.toString()}`
-      console.log('[v0] fetchRanking called, url:', url, 'phone:', phoneNumber)
       const res = await fetch(url)
       const json = await res.json()
-      console.log('[v0] ranking response:', res.status, JSON.stringify(json).slice(0, 300))
       if (res.ok) {
         setRankings(json.rankings || [])
         setMyRank(json.my_rank ?? null)
@@ -177,171 +176,164 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
 
   // Generate share image on canvas
   const generateShareImage = useCallback((): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas')
-      canvas.width = 1080
-      canvas.height = 1920
-      const ctx = canvas.getContext('2d')!
+    return new Promise((resolve, reject) => {
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 1080
+        canvas.height = 1920
+        const ctx = canvas.getContext('2d')!
 
-      // Background
-      const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920)
-      bgGrad.addColorStop(0, '#1e1033')
-      bgGrad.addColorStop(0.5, '#2d1b69')
-      bgGrad.addColorStop(1, '#1a0d2e')
-      ctx.fillStyle = bgGrad
-      ctx.fillRect(0, 0, 1080, 1920)
+        // Background
+        const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920)
+        bgGrad.addColorStop(0, '#1e1033')
+        bgGrad.addColorStop(0.5, '#2d1b69')
+        bgGrad.addColorStop(1, '#1a0d2e')
+        ctx.fillStyle = bgGrad
+        ctx.fillRect(0, 0, 1080, 1920)
 
-      // Decorative circles
-      ctx.globalAlpha = 0.08
-      ctx.beginPath()
-      ctx.arc(200, 400, 300, 0, Math.PI * 2)
-      ctx.fillStyle = '#8b5cf6'
-      ctx.fill()
-      ctx.beginPath()
-      ctx.arc(880, 1400, 250, 0, Math.PI * 2)
-      ctx.fillStyle = '#d946ef'
-      ctx.fill()
-      ctx.globalAlpha = 1
-
-      // Title
-      ctx.textAlign = 'center'
-      ctx.fillStyle = '#a78bfa'
-      ctx.font = 'bold 48px sans-serif'
-      ctx.fillText('PROMPT BATTLE', 540, 440)
-
-      // Score circle
-      const scoreGrad = ctx.createLinearGradient(390, 550, 690, 950)
-      scoreGrad.addColorStop(0, '#8b5cf6')
-      scoreGrad.addColorStop(1, '#d946ef')
-      ctx.beginPath()
-      ctx.arc(540, 750, 180, 0, Math.PI * 2)
-      ctx.strokeStyle = scoreGrad
-      ctx.lineWidth = 12
-      ctx.stroke()
-
-      ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 120px sans-serif'
-      ctx.fillText(`${finalScore}`, 540, 785)
-      ctx.font = 'bold 32px sans-serif'
-      ctx.fillStyle = '#c4b5fd'
-      ctx.fillText('SCORE', 540, 835)
-
-      // Grade
-      ctx.font = 'bold 64px sans-serif'
-      ctx.fillStyle = '#fbbf24'
-      ctx.fillText(grade, 540, 1020)
-
-      // Ranking section
-      if (myRank && totalPlayers > 0) {
-        // Rank badge background
-        const rankBoxY = 1080
-        ctx.fillStyle = 'rgba(251, 191, 36, 0.1)'
+        // Decorative circles
+        ctx.globalAlpha = 0.08
         ctx.beginPath()
-        ctx.roundRect(290, rankBoxY, 500, 120, 24)
+        ctx.arc(200, 400, 300, 0, Math.PI * 2)
+        ctx.fillStyle = '#8b5cf6'
         ctx.fill()
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)'
-        ctx.lineWidth = 2
         ctx.beginPath()
-        ctx.roundRect(290, rankBoxY, 500, 120, 24)
+        ctx.arc(880, 1400, 250, 0, Math.PI * 2)
+        ctx.fillStyle = '#d946ef'
+        ctx.fill()
+        ctx.globalAlpha = 1
+
+        // Title
+        ctx.textAlign = 'center'
+        ctx.fillStyle = '#a78bfa'
+        ctx.font = 'bold 48px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillText('PROMPT BATTLE', 540, 440)
+
+        // Score circle
+        const scoreGrad = ctx.createLinearGradient(390, 550, 690, 950)
+        scoreGrad.addColorStop(0, '#8b5cf6')
+        scoreGrad.addColorStop(1, '#d946ef')
+        ctx.beginPath()
+        ctx.arc(540, 750, 180, 0, Math.PI * 2)
+        ctx.strokeStyle = scoreGrad
+        ctx.lineWidth = 12
         ctx.stroke()
 
-        // Trophy icon (text fallback)
-        ctx.font = '40px sans-serif'
-        ctx.fillText('\uD83C\uDFC6', 370, rankBoxY + 72)
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 120px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillText(`${finalScore}`, 540, 785)
+        ctx.font = 'bold 32px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#c4b5fd'
+        ctx.fillText('SCORE', 540, 835)
 
-        // Rank text
-        ctx.textAlign = 'center'
-        ctx.font = 'bold 28px sans-serif'
-        ctx.fillStyle = '#fde68a'
-        ctx.fillText('나의 순위', 540, rankBoxY + 45)
-        ctx.font = 'bold 48px sans-serif'
+        // Grade
+        ctx.font = 'bold 64px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
         ctx.fillStyle = '#fbbf24'
-        ctx.fillText(`${myRank}위`, 490, rankBoxY + 95)
-        ctx.font = '28px sans-serif'
-        ctx.fillStyle = '#fde68a80'
-        ctx.fillText(`/ ${totalPlayers}명`, 600, rankBoxY + 95)
-      }
+        ctx.fillText(grade, 540, 1020)
 
-      // Score breakdown
-      const breakdownY = myRank ? 1280 : 1180
-      ctx.textAlign = 'center'
-
-      // Idea score box
-      ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'
-      ctx.beginPath()
-      ctx.roundRect(120, breakdownY, 400, 100, 20)
-      ctx.fill()
-      ctx.font = '28px sans-serif'
-      ctx.fillStyle = '#c4b5fd'
-      ctx.fillText('아이디어', 320, breakdownY + 40)
-      ctx.font = 'bold 36px sans-serif'
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText(`${roundData.ideaScore}점`, 320, breakdownY + 80)
-
-      // Prompt score box
-      ctx.fillStyle = 'rgba(217, 70, 239, 0.15)'
-      ctx.beginPath()
-      ctx.roundRect(560, breakdownY, 400, 100, 20)
-      ctx.fill()
-      ctx.font = '28px sans-serif'
-      ctx.fillStyle = '#e9b5f6'
-      ctx.fillText('프롬프트', 760, breakdownY + 40)
-      ctx.font = 'bold 36px sans-serif'
-      ctx.fillStyle = '#ffffff'
-      ctx.fillText(`${roundData.promptScore}점`, 760, breakdownY + 80)
-
-      // Top 3 ranking preview (if available)
-      if (rankings.length > 0) {
-        const topY = breakdownY + 150
-        ctx.fillStyle = 'rgba(255,255,255,0.04)'
-        ctx.beginPath()
-        ctx.roundRect(140, topY, 800, Math.min(rankings.length, 5) * 60 + 50, 20)
-        ctx.fill()
-
-        ctx.font = 'bold 24px sans-serif'
-        ctx.fillStyle = '#a78bfa'
-        ctx.fillText('RANKING', 540, topY + 35)
-
-        const medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49']
-        const top = rankings.slice(0, 5)
-        top.forEach((entry, i) => {
-          const rowY = topY + 65 + i * 55
-          const rowBg = entry.isMe ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.03)'
-          ctx.fillStyle = rowBg
+        // Ranking section
+        if (myRank && totalPlayers > 0) {
+          const rankBoxY = 1080
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.1)'
           ctx.beginPath()
-          ctx.roundRect(180, rowY - 18, 720, 48, 12)
+          ctx.roundRect(290, rankBoxY, 500, 120, 24)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)'
+          ctx.lineWidth = 2
+          ctx.beginPath()
+          ctx.roundRect(290, rankBoxY, 500, 120, 24)
+          ctx.stroke()
+
+          ctx.textAlign = 'center'
+          ctx.font = 'bold 28px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = '#fde68a'
+          ctx.fillText('나의 순위', 540, rankBoxY + 45)
+          ctx.font = 'bold 48px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = '#fbbf24'
+          ctx.fillText(`${myRank}위`, 490, rankBoxY + 95)
+          ctx.font = '28px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = 'rgba(253,230,138,0.5)'
+          ctx.fillText(`/ ${totalPlayers}명`, 600, rankBoxY + 95)
+        }
+
+        // Score breakdown
+        const breakdownY = myRank ? 1280 : 1180
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.15)'
+        ctx.beginPath()
+        ctx.roundRect(290, breakdownY, 500, 100, 20)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.roundRect(290, breakdownY, 500, 100, 20)
+        ctx.stroke()
+        ctx.font = '28px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#c4b5fd'
+        ctx.textAlign = 'center'
+        ctx.fillText('프롬프트 점수', 540, breakdownY + 38)
+        ctx.font = 'bold 44px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#ffffff'
+        ctx.fillText(`${roundData.promptScore}점`, 540, breakdownY + 83)
+
+        // Top rankings
+        if (rankings.length > 0) {
+          const topY = breakdownY + 150
+          ctx.fillStyle = 'rgba(255,255,255,0.04)'
+          ctx.beginPath()
+          ctx.roundRect(140, topY, 800, Math.min(rankings.length, 5) * 60 + 50, 20)
           ctx.fill()
 
-          ctx.textAlign = 'left'
-          ctx.font = '24px sans-serif'
-          ctx.fillStyle = '#ffffff'
-          const prefix = i < 3 ? medals[i] : `${entry.rank}.`
-          ctx.fillText(prefix, 200, rowY + 10)
-
-          const name = entry.isMe ? 'ME' : `\uCC38\uAC00\uC790 ${entry.rank}`
-          ctx.font = entry.isMe ? 'bold 24px sans-serif' : '24px sans-serif'
-          ctx.fillStyle = entry.isMe ? '#c4b5fd' : '#e2d9f3'
-          ctx.fillText(name, 270, rowY + 10)
-
-          ctx.textAlign = 'right'
-          ctx.font = 'bold 24px sans-serif'
-          ctx.fillStyle = '#ffffff'
-          ctx.fillText(`${entry.score}점`, 860, rowY + 10)
+          ctx.font = 'bold 24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+          ctx.fillStyle = '#a78bfa'
           ctx.textAlign = 'center'
-        })
+          ctx.fillText('RANKING', 540, topY + 35)
+
+          const top = rankings.slice(0, 5)
+          top.forEach((entry, i) => {
+            const rowY = topY + 65 + i * 55
+            if (entry.isMe) {
+              ctx.fillStyle = 'rgba(139,92,246,0.2)'
+              ctx.beginPath()
+              ctx.roundRect(180, rowY - 18, 720, 48, 12)
+              ctx.fill()
+            }
+
+            ctx.textAlign = 'left'
+            ctx.font = '24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+            ctx.fillStyle = '#ffffff'
+            const rankLabel = i === 0 ? '1' : i === 1 ? '2' : i === 2 ? '3' : `${entry.rank}`
+            ctx.fillText(`${rankLabel}.`, 210, rowY + 10)
+
+            const name = entry.isMe ? 'ME' : `참가자 ${entry.rank}`
+            ctx.font = entry.isMe ? 'bold 24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif' : '24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+            ctx.fillStyle = entry.isMe ? '#c4b5fd' : '#e2d9f3'
+            ctx.fillText(name, 260, rowY + 10)
+
+            ctx.textAlign = 'right'
+            ctx.font = 'bold 24px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+            ctx.fillStyle = '#ffffff'
+            ctx.fillText(`${entry.score}점`, 860, rowY + 10)
+          })
+        }
+
+        // Footer
+        ctx.textAlign = 'center'
+        ctx.font = '26px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#7c6faa'
+        ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1770)
+        ctx.font = '22px "Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
+        ctx.fillStyle = '#5c4f8a'
+        ctx.fillText('AI가 판단한다.', 540, 1810)
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob)
+          else reject(new Error('blob is null'))
+        }, 'image/png')
+      } catch (e) {
+        reject(e)
       }
-
-      // Footer
-      ctx.textAlign = 'center'
-      ctx.font = '28px sans-serif'
-      ctx.fillStyle = '#7c6faa'
-      ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1770)
-      ctx.font = '24px sans-serif'
-      ctx.fillText('AI가 판단한다.', 540, 1810)
-
-      canvas.toBlob((blob) => resolve(blob!), 'image/png')
     })
-  }, [finalScore, grade, roundData.ideaScore, roundData.promptScore, myRank, totalPlayers, rankings])
+  }, [finalScore, grade, roundData.promptScore, myRank, totalPlayers, rankings])
 
   // Download share image
   const handleDownloadImage = useCallback(async () => {
@@ -357,7 +349,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      setShareMessage('���미지가 저장되었습니다!')
+      setShareMessage('이미지가 저장되었습니다!')
       setTimeout(() => setShareMessage(''), 2000)
     } catch {
       setShareMessage('이미지 생성에 실패했습니다.')
@@ -370,6 +362,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
       <motion.div
+        ref={captureRef}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-2xl w-full"
@@ -411,12 +404,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
           </div>
           <div className="flex justify-center gap-8">
             <div className="text-center">
-              <p className="text-xs text-violet-300/50 mb-1">아이디어</p>
-              <p className="text-2xl font-bold text-white">{roundData.ideaScore}</p>
-            </div>
-            <div className="w-px bg-white/10" />
-            <div className="text-center">
-              <p className="text-xs text-violet-300/50 mb-1">프롬프트</p>
+              <p className="text-xs text-violet-300/50 mb-1">프롬프트 점수</p>
               <p className="text-2xl font-bold text-white">{roundData.promptScore}</p>
             </div>
           </div>
@@ -446,20 +434,6 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            {/* Idea Score Details */}
-            <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Lightbulb className="w-5 h-5 text-amber-400" />
-                <span className="font-semibold text-white">아이디어 평가</span>
-                <span className="ml-auto text-lg font-bold text-white">{roundData.ideaScore}점</span>
-              </div>
-              <ScoreBar label="창의성" score={roundData.ideaDetails.creativity} />
-              <ScoreBar label="실현 가능성" score={roundData.ideaDetails.feasibility} />
-              <ScoreBar label="구체성" score={roundData.ideaDetails.specificity} />
-              <ScoreBar label="시장성" score={roundData.ideaDetails.marketability} />
-              <ScoreBar label="트렌드 적합도" score={roundData.ideaDetails.trendAlignment} />
-            </div>
-
             {/* Prompt Score Details */}
             <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
               <div className="flex items-center gap-2 mb-1">
@@ -467,57 +441,50 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 <span className="font-semibold text-white">프롬프트 구조 평가</span>
                 <span className="ml-auto text-lg font-bold text-white">{roundData.promptScore}점</span>
               </div>
-              <ScoreBar label="역할 명확성" score={roundData.promptDetails.roleClarity} />
-              <ScoreBar label="구조 품질" score={roundData.promptDetails.structureQuality} />
-              <ScoreBar label="출력 명세" score={roundData.promptDetails.outputSpecification} />
+              <ScoreBar label="요구 명확도" score={Math.round((roundData.promptDetails.reqClarity / 15) * 100)} />
+              <ScoreBar label="정보 충분성 (타겟 포함)" score={Math.round((roundData.promptDetails.infoSufficiency / 20) * 100)} />
+              <ScoreBar label="기능 명세 완성도" score={Math.round((roundData.promptDetails.funcSpec / 15) * 100)} />
+              <ScoreBar label="구체성 수준" score={Math.round((roundData.promptDetails.specificity / 15) * 100)} />
+              <ScoreBar label="해석 안정성" score={Math.round((roundData.promptDetails.interpStability / 10) * 100)} />
+              <ScoreBar label="실행 가능성" score={Math.round((roundData.promptDetails.executability / 15) * 100)} />
+              <ScoreBar label="구조 조직력" score={Math.round((roundData.promptDetails.structureOrg / 10) * 100)} />
+              <ScoreBar label="의도 일관성" score={Math.round((roundData.promptDetails.intentConsist / 10) * 100)} />
             </div>
 
             {/* AI Feedback */}
             <div className="bg-sky-500/[0.06] border border-sky-500/20 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-3">
-                <MessageSquare className="w-5 h-5 text-sky-400" />
+                <Sparkles className="w-5 h-5 text-sky-400" />
                 <span className="font-semibold text-white">AI 총평</span>
               </div>
-              <p className="text-violet-100/80 leading-relaxed text-sm">
-                {roundData.feedback}
-              </p>
+              <div className="space-y-3">
+                {roundData.feedback.split('\n\n').map((paragraph, idx) => (
+                  <p key={idx} className="text-violet-100/80 leading-relaxed text-sm">
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
             </div>
 
-            {/* Strengths & Weaknesses */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {roundData.strengths.length > 0 && (
-                <div className="bg-emerald-500/[0.08] border border-emerald-500/20 rounded-2xl p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CheckCircle className="w-5 h-5 text-emerald-400" />
-                    <span className="font-semibold text-white">강점</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {roundData.strengths.map((s, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-emerald-100/80">
-                        <span className="text-emerald-400 mt-0.5 shrink-0">*</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
+            {/* Improvements */}
+            {roundData.weaknesses.length > 0 && (
+              <div className="bg-amber-500/[0.08] border border-amber-500/20 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <XCircle className="w-5 h-5 text-amber-400" />
+                  <span className="font-semibold text-white">개선점</span>
                 </div>
-              )}
-              {roundData.weaknesses.length > 0 && (
-                <div className="bg-amber-500/[0.08] border border-amber-500/20 rounded-2xl p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <XCircle className="w-5 h-5 text-amber-400" />
-                    <span className="font-semibold text-white">개선점</span>
-                  </div>
-                  <ul className="space-y-2">
-                    {roundData.weaknesses.map((w, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-amber-100/80">
-                        <span className="text-amber-400 mt-0.5 shrink-0">*</span>
-                        <span>{w}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+                <ul className="space-y-3">
+                  {roundData.weaknesses.map((w, idx) => (
+                    <li key={idx} className="flex items-start gap-3 text-sm text-amber-100/80 leading-relaxed">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-[10px] font-bold text-amber-300 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <span>{w}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Written Prompt */}
             <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-6">
@@ -708,7 +675,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 ) : (
                   <>
                     <Download className="w-5 h-5" />
-                    <span>공유용 이미지 저장하기</span>
+                    <span>공유용 이미지 저��하기</span>
                   </>
                 )}
               </motion.button>
