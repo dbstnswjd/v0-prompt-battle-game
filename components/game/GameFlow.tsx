@@ -2,21 +2,20 @@
 
 import { useState, useRef } from 'react'
 import { PhoneInput } from './PhoneInput'
-import { TopicGeneration } from './TopicGeneration'
 import { PromptWriting } from './PromptWriting'
 import { Evaluating } from './Evaluating'
 import { RoundEvaluation } from './RoundEvaluation'
 import { FinalResults } from './FinalResults'
-import { generateRandomTopic } from '@/lib/topic-generator'
 import { evaluatePrompt } from '@/lib/prompt-evaluator'
 import type { RoundData, GameStage } from '@/lib/game-types'
+
+const FREE_TOPIC = '자유 주제 - 앱 개발 프롬프트'
 
 export function GameFlow() {
   const [stage, setStage] = useState<GameStage>('phone')
   const [phoneNumber, setPhoneNumber] = useState('')
   const [round1, setRound1] = useState<RoundData | null>(null)
   const [round2, setRound2] = useState<RoundData | null>(null)
-  const [currentTopic, setCurrentTopic] = useState('')
 
   // Use ref to avoid stale closure issues in setTimeout callbacks
   const sessionIdRef = useRef<string | null>(null)
@@ -82,19 +81,7 @@ export function GameFlow() {
     setPhoneNumber(phone)
     phoneRef.current = phone
     await createSession(phone)
-    setStage('topic-1')
-  }
-
-  // Topic generated
-  const handleTopicGenerated = (topic: string) => {
-    setCurrentTopic(topic)
-    if (stage === 'topic-1') setStage('writing-1')
-    else if (stage === 'topic-2') setStage('writing-2')
-  }
-
-  // Change topic locally
-  const handleChangeTopic = () => {
-    setCurrentTopic(generateRandomTopic())
+    setStage('writing-1')
   }
 
   // Submit prompt -> evaluate locally
@@ -104,11 +91,11 @@ export function GameFlow() {
 
     // Simulate brief loading for UX, then evaluate locally
     setTimeout(() => {
-      const evaluation = evaluatePrompt(prompt, currentTopic)
+      const evaluation = evaluatePrompt(prompt, FREE_TOPIC)
       const totalScore = Math.round((evaluation.ideaScore + evaluation.promptScore) / 2)
 
       const roundData: RoundData = {
-        topic: currentTopic,
+        topic: FREE_TOPIC,
         prompt,
         ideaScore: evaluation.ideaScore,
         promptScore: evaluation.promptScore,
@@ -133,7 +120,7 @@ export function GameFlow() {
   }
 
   // Round 1 evaluation -> continue or skip
-  const handleContinueToRound2 = () => setStage('topic-2')
+  const handleContinueToRound2 = () => setStage('writing-2')
   const handleSkipToResults = () => setStage('results')
   const handleViewResults = () => setStage('results')
 
@@ -145,29 +132,17 @@ export function GameFlow() {
     phoneRef.current = ''
     setRound1(null)
     setRound2(null)
-    setCurrentTopic('')
   }
 
   switch (stage) {
     case 'phone':
       return <PhoneInput onSubmit={handlePhoneSubmit} />
 
-    case 'topic-1':
-    case 'topic-2':
-      return (
-        <TopicGeneration
-          roundNumber={stage === 'topic-1' ? 1 : 2}
-          onTopicGenerated={handleTopicGenerated}
-        />
-      )
-
     case 'writing-1':
     case 'writing-2':
       return (
         <PromptWriting
-          topic={currentTopic}
           roundNumber={stage === 'writing-1' ? 1 : 2}
-          onChangeTopic={handleChangeTopic}
           onSubmit={handlePromptSubmit}
         />
       )

@@ -1,19 +1,29 @@
 'use client'
 
 import { useState } from 'react'
-import { Send, AlertCircle, Shuffle } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Send, AlertCircle, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+
+const EXAMPLE_PROMPT = `앱 이름: Daily Wellness
+목적: 사용자의 정신적/신체적 건강 추적 및 향상
+
+주요 기능:
+1. 일일 기분 추적기 - 기분 선택 및 메모 입력, 그래프 시각화
+2. 운동 기록 - 맞춤 목표 설정, 운동 종류 선택, 통계 제공
+3. 명상/이완 기법 - 유형별 명상 제공, 맞춤형 추천
+4. 건강 팁 - 매일 건강 팁 제공, 개인화 추천
+5. 커뮤니티 - 경험 공유 포럼, 주제별 토론
+6. 알림 - 목표/기록 리마인더 제공`
 
 interface PromptWritingProps {
-  topic: string
   roundNumber: number
-  onChangeTopic: () => void
   onSubmit: (prompt: string) => void
 }
 
-export function PromptWriting({ topic, roundNumber, onChangeTopic, onSubmit }: PromptWritingProps) {
+export function PromptWriting({ roundNumber, onSubmit }: PromptWritingProps) {
   const [prompt, setPrompt] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showExample, setShowExample] = useState(true)
 
   const handleSubmit = () => {
     if (isSubmitting) return
@@ -37,28 +47,57 @@ export function PromptWriting({ topic, roundNumber, onChangeTopic, onSubmit }: P
             <span className="text-violet-300 font-medium">Round {roundNumber}</span>
           </div>
 
-          {/* Topic card */}
-          <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 mb-6 relative">
-            <p className="text-sm text-violet-300/70 mb-2">주제</p>
-            <p className="text-xl font-bold text-white leading-relaxed pr-24">
-              {topic}
-            </p>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            자유 주제 앱 개발 프롬프트
+          </h2>
+          <p className="text-violet-300/60 text-sm">
+            원하는 앱을 자유롭게 구상하고, AI에게 전달할 프롬프트를 작성하세요
+          </p>
+        </div>
 
-            <button
-              onClick={onChangeTopic}
-              className="absolute top-4 right-4 px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 bg-violet-500/20 hover:bg-violet-500/40 text-violet-200 border border-violet-500/30 cursor-pointer"
-              title="주제 변경"
-            >
-              <Shuffle className="w-4 h-4" />
-              <span className="text-sm">주제 변경</span>
-            </button>
-          </div>
+        {/* Example prompt card */}
+        <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl mb-6 overflow-hidden">
+          <button
+            onClick={() => setShowExample(!showExample)}
+            className="w-full flex items-center justify-between p-4 text-left transition-colors hover:bg-white/[0.03]"
+          >
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-violet-400" />
+              <span className="text-sm font-medium text-violet-200">프롬프트 예시 보기</span>
+            </div>
+            {showExample ? (
+              <ChevronUp className="w-4 h-4 text-violet-300/50" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-violet-300/50" />
+            )}
+          </button>
+          <AnimatePresence>
+            {showExample && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="px-4 pb-4">
+                  <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4">
+                    <p className="text-sm text-violet-100/70 whitespace-pre-wrap leading-relaxed">
+                      {EXAMPLE_PROMPT}
+                    </p>
+                  </div>
+                  <p className="text-xs text-violet-300/40 mt-2">
+                    위 예시처럼 앱 이름, 목적, 주요 기능을 구체적으로 작성해보세요
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
 
-          {/* Warning */}
-          <div className="flex items-center justify-center gap-2 text-amber-400/70 text-sm mb-4">
-            <AlertCircle className="w-4 h-4" />
-            <span>수정 불가 -- 한 번 제출하면 되돌릴 수 없습니다</span>
-          </div>
+        {/* Warning */}
+        <div className="flex items-center justify-center gap-2 text-amber-400/70 text-sm mb-4">
+          <AlertCircle className="w-4 h-4" />
+          <span>수정 불가 -- 한 번 제출하면 되돌릴 수 없습니다</span>
         </div>
 
         {/* Prompt input */}
@@ -69,7 +108,7 @@ export function PromptWriting({ topic, roundNumber, onChangeTopic, onSubmit }: P
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            placeholder={`AI에게 전달할 프롬프트를 작성하세요...\n\n예시:\n- 역할을 명확히 정의하세요\n- 출력 형식을 구체적으로 지정하세요\n- 조건과 제약사항을 포함하세요`}
+            placeholder={`AI에게 전달할 앱 개발 프롬프트를 작성하세요...\n\n팁:\n- 앱의 이름과 목적을 명확히 하세요\n- 주요 기능을 구체적으로 나열하세요\n- 대상 사용자를 정의하세요\n- 기술적 요구사항을 포함하세요`}
             disabled={isSubmitting}
             className="w-full h-64 px-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder-violet-300/30 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-400/20 resize-none disabled:opacity-50 leading-relaxed"
           />

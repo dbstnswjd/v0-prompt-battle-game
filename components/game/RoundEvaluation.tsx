@@ -262,7 +262,7 @@ export function RoundEvaluation({
             {roundNumber === 1 && (
               <div className="bg-violet-500/[0.06] border border-violet-500/20 rounded-xl p-4 text-center">
                 <p className="text-sm text-violet-200/60">
-                  Round 2에서는 완전히 새로운 주제가 주어집니다.
+                  Round 2에서 다시 한 번 자유롭게 앱 개발 프롬프트를 작성할 수 있습니다.
                   <br />
                   최종 점수는 두 라운드 중 더 높은 점수로 결정됩니다.
                 </p>

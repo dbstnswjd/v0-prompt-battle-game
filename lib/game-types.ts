@@ -23,11 +23,9 @@ export interface RoundData {
 
 export type GameStage =
   | 'phone'
-  | 'topic-1'
   | 'writing-1'
   | 'evaluating-1'
   | 'evaluation-1'
-  | 'topic-2'
   | 'writing-2'
   | 'evaluating-2'
   | 'evaluation-2'
