@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import Script from 'next/script'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -8,7 +9,7 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: '프롬프트 배틀 - AI가 판단하는 프롬프트 대결',
-  description: '단 2번의 기회, AI가 냉정하게 판단한다. 프롬프트는 감각이 아니라 설계다.',
+  description: 'AI가 냉정하게 판단한다. 프롬프트는 감각이 아니라 설계다.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -36,10 +37,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="dark">
-      <head>
-        <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js" crossOrigin="anonymous" />
-      </head>
       <body className="font-sans antialiased">
+        <Script
+          src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js"
+          strategy="afterInteractive"
+          crossOrigin="anonymous"
+        />
         {children}
         <Analytics />
       </body>

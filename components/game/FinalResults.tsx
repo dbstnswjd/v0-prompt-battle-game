@@ -1,10 +1,22 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Trophy, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
+
+declare global {
+  interface Window {
+    Kakao?: {
+      init: (key: string) => void
+      isInitialized: () => boolean
+      Share: {
+        sendDefault: (options: Record<string, unknown>) => void
+      }
+    }
+  }
+}
 
 interface FinalResultsProps {
   roundData: RoundData
@@ -181,19 +193,71 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
 
   const rankText = myRank ? `\n현재 순위: ${myRank}위 / ${totalPlayers}명` : ''
   const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!${rankText}\n아이디어: ${roundData.ideaScore}점 | 프롬프트: ${roundData.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. AI가 판단한다.`
-  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
+  const shareUrl = typeof window !== 'undefined' ? window.location.origin : ''
+
+  const kakaoInitialized = useRef(false)
+
+  // Initialize Kakao SDK
+  useEffect(() => {
+    const initKakao = () => {
+      const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+      if (!kakaoKey) return
+      if (window.Kakao && !window.Kakao.isInitialized()) {
+        window.Kakao.init(kakaoKey)
+        kakaoInitialized.current = true
+      } else if (window.Kakao?.isInitialized()) {
+        kakaoInitialized.current = true
+      }
+    }
+
+    // SDK script may not be loaded yet
+    if (window.Kakao) {
+      initKakao()
+    } else {
+      const check = setInterval(() => {
+        if (window.Kakao) {
+          initKakao()
+          clearInterval(check)
+        }
+      }, 200)
+      // Stop checking after 5 seconds
+      setTimeout(() => clearInterval(check), 5000)
+    }
+  }, [])
 
   const handleKakaoShare = useCallback(() => {
-    const mobileKakaoUrl = `kakaotalk://msg/text/${encodeURIComponent(shareText)}`
-    if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-      window.location.href = mobileKakaoUrl
-      setTimeout(() => {
-        window.open(`https://story.kakao.com/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank')
-      }, 1500)
-    } else {
-      window.open(`https://story.kakao.com/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank')
+    if (!window.Kakao || !window.Kakao.isInitialized()) {
+      setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
+      setTimeout(() => setShareMessage(''), 2000)
+      return
     }
-  }, [shareText, shareUrl])
+
+    const description = myRank
+      ? `${finalScore}점 (${grade}등급) | 순위: ${myRank}위 / ${totalPlayers}명\n아이디어 ${roundData.ideaScore}점 | 프롬프트 ${roundData.promptScore}점`
+      : `${finalScore}점 (${grade}등급)\n아이디어 ${roundData.ideaScore}점 | 프롬프트 ${roundData.promptScore}점`
+
+    window.Kakao!.Share.sendDefault({
+      objectType: 'feed',
+      content: {
+        title: '프롬프트 배틀 결과',
+        description,
+        imageUrl: `${shareUrl}/og-image.png`,
+        link: {
+          mobileWebUrl: shareUrl,
+          webUrl: shareUrl,
+        },
+      },
+      buttons: [
+        {
+          title: '나도 도전하기',
+          link: {
+            mobileWebUrl: shareUrl,
+            webUrl: shareUrl,
+          },
+        },
+      ],
+    })
+  }, [finalScore, grade, myRank, totalPlayers, roundData.ideaScore, roundData.promptScore, shareUrl])
 
   const generateShareImage = useCallback((): Promise<Blob> => {
     return new Promise((resolve) => {
