@@ -75,15 +75,12 @@ export function GameFlow() {
 
     setTimeout(() => {
       const evaluation = evaluatePrompt(prompt, FREE_TOPIC)
-      const totalScore = Math.round((evaluation.ideaScore + evaluation.promptScore) / 2)
 
       const data: RoundData = {
         topic: FREE_TOPIC,
         prompt,
-        ideaScore: evaluation.ideaScore,
         promptScore: evaluation.promptScore,
-        totalScore,
-        ideaDetails: evaluation.ideaDetails,
+        totalScore: evaluation.promptScore,
         promptDetails: evaluation.promptDetails,
         feedback: evaluation.feedback,
         strengths: evaluation.strengths,

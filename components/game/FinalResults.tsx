@@ -411,12 +411,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
           </div>
           <div className="flex justify-center gap-8">
             <div className="text-center">
-              <p className="text-xs text-violet-300/50 mb-1">아이디어</p>
-              <p className="text-2xl font-bold text-white">{roundData.ideaScore}</p>
-            </div>
-            <div className="w-px bg-white/10" />
-            <div className="text-center">
-              <p className="text-xs text-violet-300/50 mb-1">프롬프트</p>
+              <p className="text-xs text-violet-300/50 mb-1">프롬프트 점수</p>
               <p className="text-2xl font-bold text-white">{roundData.promptScore}</p>
             </div>
           </div>
@@ -446,20 +441,6 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            {/* Idea Score Details */}
-            <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center gap-2 mb-1">
-                <Lightbulb className="w-5 h-5 text-amber-400" />
-                <span className="font-semibold text-white">아이디어 평가</span>
-                <span className="ml-auto text-lg font-bold text-white">{roundData.ideaScore}점</span>
-              </div>
-              <ScoreBar label="창의성" score={roundData.ideaDetails.creativity} />
-              <ScoreBar label="실현 가능성" score={roundData.ideaDetails.feasibility} />
-              <ScoreBar label="구체성" score={roundData.ideaDetails.specificity} />
-              <ScoreBar label="시장성" score={roundData.ideaDetails.marketability} />
-              <ScoreBar label="트렌드 적합도" score={roundData.ideaDetails.trendAlignment} />
-            </div>
-
             {/* Prompt Score Details */}
             <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
               <div className="flex items-center gap-2 mb-1">
@@ -467,10 +448,10 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 <span className="font-semibold text-white">프롬프트 구조 평가</span>
                 <span className="ml-auto text-lg font-bold text-white">{roundData.promptScore}점</span>
               </div>
-              <ScoreBar label="문장 구조 완성도" score={Math.min(100, 50 + roundData.promptDetails.structureScore * 3)} />
-              <ScoreBar label="길이 적절성" score={Math.min(100, 50 + roundData.promptDetails.lengthScore * 5)} />
-              <ScoreBar label="구체성" score={Math.min(100, 50 + roundData.promptDetails.specificityScore * 2.5)} />
-              <ScoreBar label="논리 연결성" score={Math.min(100, 50 + roundData.promptDetails.logicScore * 3)} />
+              <ScoreBar label="이해 명확도" score={Math.round((roundData.promptDetails.clarityScore / 25) * 100)} />
+              <ScoreBar label="해석 범위 안정성" score={Math.round((roundData.promptDetails.stabilityScore / 25) * 100)} />
+              <ScoreBar label="정보 충분성" score={Math.round((roundData.promptDetails.sufficiencyScore / 25) * 100)} />
+              <ScoreBar label="결과 예측 가능성" score={Math.round((roundData.promptDetails.predictabilityScore / 25) * 100)} />
             </div>
 
             {/* AI Feedback */}
@@ -713,7 +694,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 ) : (
                   <>
                     <Download className="w-5 h-5" />
-                    <span>공유용 이미지 저장하기</span>
+                    <span>공유용 이미지 저��하기</span>
                   </>
                 )}
               </motion.button>

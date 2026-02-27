@@ -1,27 +1,18 @@
 // ─── 타입 정의 ───────────────────────────────────────────────────
 interface EvaluationResult {
-  ideaScore: number
   promptScore: number
   feedback: string
-  ideaDetails: {
-    creativity: number
-    feasibility: number
-    specificity: number
-    marketability: number
-    trendAlignment: number
-  }
   promptDetails: {
-    structureScore: number
-    lengthScore: number
-    specificityScore: number
-    logicScore: number
-    repetitionPenalty: number
+    clarityScore: number
+    stabilityScore: number
+    sufficiencyScore: number
+    predictabilityScore: number
   }
   strengths: string[]
   weaknesses: string[]
 }
 
-// ─── Hard filter: 0점 처리 ───────────────────────────────────────
+// ─── Hard filter ─────────────────────────────────────────────────
 function isInvalidPrompt(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed.length < 5) return true
@@ -31,310 +22,203 @@ function isInvalidPrompt(text: string): boolean {
   return false
 }
 
-// ─── NLP 심층 분석 ────────────────────────────────────────────────
+// ─── 분석 ────────────────────────────────────────────────────────
 function analyze(text: string) {
   const words = text.split(/\s+/).filter(Boolean)
   const sentences = text.split(/[.。!！?？\n]+/).filter(s => s.trim().length > 0)
 
-  // 단어 빈도 및 중복률
   const wordFreq: Record<string, number> = {}
   words.forEach(w => { wordFreq[w] = (wordFreq[w] || 0) + 1 })
   const uniqueWords = Object.keys(wordFreq).length
   const duplicateWords = Object.values(wordFreq).filter(c => c > 1).reduce((a, b) => a + b, 0)
   const dupRate = words.length > 0 ? duplicateWords / words.length : 0
-  const ttr = words.length > 0 ? uniqueWords / words.length : 0
 
-  // 형태소 추정 (한국어 기반)
   const nouns = text.match(/[가-힣]{2,}(?:이|가|을|를|의|에|에서|로|으로|와|과|도|는|은)/g) || []
   const verbs = text.match(/(?:해|해줘|알려|설명|분석|작성|생성|만들|제시|요약|정리|구현|설계|추천)/g) || []
-  const adjectives = text.match(/(?:구체적|자세|상세|명확|정확|간결|효율|최적|핵심|전문|빠른|좋은|나쁜)/g) || []
 
-  // 분석 지표
   const hasNumber = /\d+/.test(text)
   const hasProperNoun = /[A-Z][a-z]+|[가-힣]{2,}(?:기업|회사|서비스|플랫폼|앱|시스템)/.test(text)
   const hasTechnicalTerm = /AI|API|UX|UI|DB|SaaS|B2B|B2C|MVP|KPI|ROI|머신러닝|딥러닝|알고리즘|아키텍처/.test(text)
   const hasPurpose = /위해|목적|원한다|하려고|하기 위|을 위한|를 위한|필요|원하는/.test(text)
-  const hasCondition = /만약|조건|경우|상황|때는|이라면|다면|~하면/.test(text)
+  const hasCondition = /만약|조건|경우|상황|때는|이라면|다면/.test(text)
   const hasOutputFormat = /표|목록|단계|번호|형식|포맷|정리|요약|예시|샘플|리스트/.test(text)
   const hasTarget = /사용자|고객|대상|타겟|팀|개발자|기획자|마케터|학생|초보|전문가/.test(text)
-  const isQuestion = /[?？]/.test(text) || /알려줘|설명해|말해줘|알고 싶|궁금|어떻게|무엇/.test(text)
 
-  // 연결어 분석
   const causeConnectors = ['때문에', '따라서', '그러므로', '결과적으로', '이로 인해']
   const contrastConnectors = ['하지만', '그러나', '반면', '반대로', '대신']
   const addConnectors = ['그리고', '또한', '게다가', '뿐만 아니라', '추가로']
-  const condConnectors = ['만약', '~라면', '경우에는', '조건으로']
+  const condConnectors = ['만약', '라면', '경우에는', '조건으로']
+  const connectorCount = [...causeConnectors, ...contrastConnectors, ...addConnectors, ...condConnectors]
+    .filter(c => text.includes(c)).length
 
-  const causeCount = causeConnectors.filter(c => text.includes(c)).length
-  const contrastCount = contrastConnectors.filter(c => text.includes(c)).length
-  const addCount = addConnectors.filter(c => text.includes(c)).length
-  const condCount = condConnectors.filter(c => text.includes(c)).length
-  const connectorCount = causeCount + contrastCount + addCount + condCount
-
-  // 추상어 분석
-  const abstractWords = text.match(/(?:좋은|나쁜|잘|많이|빠르게|효율적|최대한|가능하면|적당히|잘 되게|멋지게)/g) || []
+  const abstractWords = text.match(/(?:좋은|나쁜|잘|많이|빠르게|효율적|최대한|가능하면|적당히|멋지게)/g) || []
 
   return {
     words, wordCount: words.length, charCount: text.length,
     sentences, sentenceCount: sentences.length,
     avgSentenceLen: words.length / Math.max(1, sentences.length),
-    uniqueWords, ttr, dupRate,
-    nouns, verbs, adjectives,
+    uniqueWords, dupRate, nouns, verbs,
     hasNumber, hasProperNoun, hasTechnicalTerm,
-    hasPurpose, hasCondition, hasOutputFormat, hasTarget, isQuestion,
-    causeCount, contrastCount, addCount, condCount, connectorCount,
-    abstractWords,
+    hasPurpose, hasCondition, hasOutputFormat, hasTarget,
+    connectorCount, abstractWords,
   }
 }
 
-// ─── 프롬프트 점수 ────────────────────────────────────────────────
+// ─── 4개 평가 항목 점수 계산 ──────────────────────────────────────
 function scorePromptQuality(text: string) {
   if (isInvalidPrompt(text)) {
     return {
       total: 0,
-      details: { structureScore: 0, lengthScore: 0, specificityScore: 0, logicScore: 0, repetitionPenalty: 0 }
+      details: { clarityScore: 0, stabilityScore: 0, sufficiencyScore: 0, predictabilityScore: 0 }
     }
   }
 
   const a = analyze(text)
-  let base = 50
 
-  // A. 문장 구조 완성도 (0~15)
-  let structureScore = 0
-  if (a.nouns.length >= 1) structureScore += 5
-  if (a.verbs.length >= 1) structureScore += 5
-  if (a.sentenceCount >= 2) structureScore += 5
+  // A. 이해 명확도 (Clarity of Intent) 0~25
+  let clarityScore = 10
+  if (a.verbs.length >= 1) clarityScore += 5
+  if (a.nouns.length >= 2) clarityScore += 5
+  if (a.hasPurpose) clarityScore += 5
+  clarityScore = Math.min(25, clarityScore)
 
-  // B. 길이 적절성 (0~10)
-  let lengthScore = 0
-  if (a.wordCount >= 10) lengthScore += 5
-  if (a.charCount >= 30 && a.charCount <= 300) lengthScore += 5
-  if (a.charCount > 300) lengthScore -= 5
+  // B. 해석 범위 안정성 (Interpretation Stability) 0~25
+  let stabilityScore = 5
+  if (a.hasCondition) stabilityScore += 8
+  if (a.hasTarget) stabilityScore += 7
+  if (a.connectorCount >= 1) stabilityScore += 5
+  if (a.abstractWords.length >= 3) stabilityScore = Math.max(0, stabilityScore - 5)
+  stabilityScore = Math.min(25, stabilityScore)
 
-  // C. 구체성 (0~20)
-  let specificityScore = 0
-  if (a.hasNumber) specificityScore += 5
-  if (a.hasPurpose) specificityScore += 5
-  if (a.hasCondition) specificityScore += 5
-  if (a.hasOutputFormat) specificityScore += 5
+  // C. 정보 충분성 (Information Sufficiency) 0~25
+  let sufficiencyScore = 5
+  if (a.wordCount >= 10) sufficiencyScore += 5
+  if (a.wordCount >= 20) sufficiencyScore += 5
+  if (a.hasNumber) sufficiencyScore += 5
+  if (a.hasTechnicalTerm || a.hasProperNoun) sufficiencyScore += 5
+  if (a.dupRate > 0.3) sufficiencyScore = Math.max(0, sufficiencyScore - 5)
+  sufficiencyScore = Math.min(25, sufficiencyScore)
 
-  // D. 논리 연결성 (0~15)
-  const logicScore = Math.min(15, a.connectorCount * 3)
-
-  // E. 반복 감점 (-10~0)
-  let repetitionPenalty = 0
-  if (a.dupRate > 0.3) repetitionPenalty = -10
-  else if (a.dupRate > 0.2) repetitionPenalty = -5
-
-  // F. 추상도 보정 (-5~+10)
-  let abstractBalance = 0
-  if (a.abstractWords.length >= 3 && a.nouns.length < 2) abstractBalance = -5
-  if (a.nouns.length >= 5) abstractBalance = 10
+  // D. 결과 예측 가능성 (Output Predictability) 0~25
+  let predictabilityScore = 5
+  if (a.hasOutputFormat) predictabilityScore += 10
+  if (a.sentenceCount >= 2) predictabilityScore += 5
+  if (a.hasCondition) predictabilityScore += 5
+  predictabilityScore = Math.min(25, predictabilityScore)
 
   const total = Math.min(100, Math.max(0,
-    base + structureScore + lengthScore + specificityScore + logicScore + repetitionPenalty + abstractBalance
+    clarityScore + stabilityScore + sufficiencyScore + predictabilityScore
   ))
 
   return {
     total: Math.round(total),
-    details: { structureScore, lengthScore, specificityScore, logicScore, repetitionPenalty }
+    details: { clarityScore, stabilityScore, sufficiencyScore, predictabilityScore }
   }
 }
 
-// ─── 아이디어 점수 ────────────────────────────────────────────────
-function scoreIdea(prompt: string, topic: string) {
-  if (isInvalidPrompt(prompt)) {
-    return {
-      total: 0,
-      details: { creativity: 0, feasibility: 0, specificity: 0, marketability: 0, trendAlignment: 0 }
-    }
-  }
-
-  let creativity = 55, feasibility = 55, specificity = 55, marketability = 55, trendAlignment = 55
-
-  const creativityKw = ['새로운', '창의적', '독특한', '혁신적', '차별화', '감성', '경험', '스토리']
-  creativity += creativityKw.filter(kw => prompt.includes(kw)).length * 8
-  if (prompt.includes('문제') || prompt.includes('해결') || prompt.includes('필요')) creativity += 10
-  if (prompt.includes('왜') || prompt.includes('어떻게')) creativity += 8
-  const innovKw = ['재해석', '전환', '조합', '통합', '융합', '개선']
-  creativity += innovKw.filter(kw => prompt.includes(kw)).length * 7
-
-  const practKw = ['간단', '쉽게', '편리', '실용적', '현실적', '가능']
-  feasibility += practKw.filter(kw => prompt.includes(kw)).length * 8
-  const techKw = ['기술', '알고리즘', '시스템', '자동화', '데이터']
-  feasibility += techKw.filter(kw => prompt.includes(kw)).length * 7
-  if (['복잡한', '어려운', '고급'].some(w => prompt.includes(w))) feasibility -= 8
-  if (prompt.includes('방법') || prompt.includes('절차') || prompt.includes('단계')) feasibility += 12
-
-  const specKw = ['기능', '서비스', '앱', '플랫폼', '시스템', '알림', '추천', '분석', '데이터']
-  specificity += specKw.filter(kw => prompt.includes(kw)).length * 9
-  const topicParts = topic.split('/').map(p => p.trim())
-  if (topicParts.some(part => prompt.includes(part.replace('을(를) 위한', '').trim()))) specificity += 15
-  const detailKw = ['구체적으로', '상세히', '정확히', '명확히']
-  specificity += detailKw.filter(kw => prompt.includes(kw)).length * 9
-  if (prompt.includes('사용자') || prompt.includes('대상') || prompt.includes('고객')) specificity += 10
-  if (prompt.includes('상황') || prompt.includes('시나리오') || prompt.includes('경우')) specificity += 8
-
-  const appealKw = ['편리', '간편', '쉬운', '빠른', '즉시', '한번에', '자동']
-  marketability += appealKw.filter(kw => prompt.includes(kw)).length * 10
-  if (prompt.includes('사용자') || prompt.includes('고객') || prompt.includes('이용자')) marketability += 12
-  if (prompt.includes('경험') || prompt.includes('만족') || prompt.includes('즐거움')) marketability += 10
-  if (prompt.includes('불편') || prompt.includes('어려움') || prompt.includes('힘든')) marketability += 12
-  if (prompt.includes('해결') && (prompt.includes('문제') || prompt.includes('pain'))) marketability += 15
-  if (['공유', '소셜', '커뮤니티', '친구', '함께', '연결'].some(kw => prompt.includes(kw))) marketability += 12
-
-  const aiKw = ['AI', '인공지능', '생성형', 'GPT', '챗봇', '자동화', '머신러닝', '학습']
-  trendAlignment += aiKw.filter(kw => prompt.includes(kw)).length * 12
-  const persoKw = ['개인화', '맞춤', '취향', '추천', '큐레이션', '나만의']
-  trendAlignment += persoKw.filter(kw => prompt.includes(kw)).length * 10
-  if (['친환경', '지속가능', '재활용', '에코', '탄소', '그린'].some(kw => prompt.includes(kw))) trendAlignment += 11
-  if (['생산성', '효율', '시간절약', '관리', '최적화'].some(kw => prompt.includes(kw))) trendAlignment += 10
-  if (['데이터', '분석', '통계', '인사이트', '지표'].some(kw => prompt.includes(kw))) trendAlignment += 8
-
-  creativity = Math.min(100, Math.max(0, creativity))
-  feasibility = Math.min(100, Math.max(0, feasibility))
-  specificity = Math.min(100, Math.max(0, specificity))
-  marketability = Math.min(100, Math.max(0, marketability))
-  trendAlignment = Math.min(100, Math.max(0, trendAlignment))
-
-  let total = Math.round((creativity + feasibility + specificity + marketability + trendAlignment) / 5)
-  if (total < 90 && total >= 60) {
-    const bonus = Math.min(8, Math.round((90 - total) * 0.15))
-    total = Math.min(89, total + bonus)
-  }
-
-  return { total, details: { creativity, feasibility, specificity, marketability, trendAlignment } }
-}
-
-// ─── PRD v4 초정밀 총평 생성 ──────────────────────────────────────
+// ─── 자연어 총평 생성 (수치 없는 AI 코칭 톤) ─────────────────────
 function buildFeedback(
   prompt: string,
-  ideaScore: number,
   promptScore: number,
-  ideaDetails: ReturnType<typeof scoreIdea>['details'],
-  promptDetails: ReturnType<typeof scorePromptQuality>['details'],
+  details: { clarityScore: number; stabilityScore: number; sufficiencyScore: number; predictabilityScore: number }
 ): string {
   const a = analyze(prompt)
-  const totalScore = Math.round((ideaScore + promptScore) / 2)
   const sections: string[] = []
 
-  // [1] 전반적 품질 진단
-  let quality = ''
-  if (totalScore >= 85) {
-    quality = `전반적으로 해당 프롬프트는 높은 수준의 완성도를 보입니다. 총 ${totalScore}점으로 구조적 명확성과 아이디어 품질이 고루 우수합니다.`
-  } else if (totalScore >= 70) {
-    quality = `전반적으로 해당 프롬프트는 기본 요건을 충족하나 일부 보완이 필요한 상태입니다. 총 ${totalScore}점으로 아이디어는 유효하지만 프롬프트 구조에서 개선 여지가 확인됩니다.`
-  } else if (totalScore >= 55) {
-    quality = `전반적으로 해당 프롬프트는 기본적인 의도는 전달되나 구체성과 전략성이 부족한 상태입니다. 총 ${totalScore}점으로 핵심 요소들이 명확히 정의되지 않아 완성도가 제한됩니다.`
+  // ① AI가 읽었을 때의 전반적 인상
+  let impression = ''
+  if (promptScore >= 80) {
+    impression = '이 프롬프트는 전반적으로 AI가 요청 의도를 명확하게 파악할 수 있는 구조로 작성되어 있습니다. 요청의 방향이 분명하고, 결과가 예측 가능한 수준으로 구체화되어 있어 일관된 출력을 기대할 수 있습니다.'
+  } else if (promptScore >= 60) {
+    impression = '이 프롬프트는 기본적인 요청 의도는 잘 전달되지만, 해석의 범위가 다소 넓게 열려 있어 다양한 방향으로 결과가 나올 수 있는 구조입니다. AI 입장에서는 무엇을 원하는지는 이해되지만, 어느 정도 수준까지 답해야 하는지 판단하기 어려울 수 있습니다.'
+  } else if (promptScore >= 40) {
+    impression = '이 프롬프트는 요청의 의도가 부분적으로 전달되지만, 전체적으로 해석의 여지가 크게 열려 있는 상태입니다. AI가 방향을 스스로 결정해야 하는 부분이 많아, 원하는 결과와 실제 결과가 달라질 가능성이 있습니다.'
   } else {
-    quality = `전반적으로 해당 프롬프트는 구조와 내용 모두 개선이 필요한 초기 단계입니다. 총 ${totalScore}점으로 목적, 대상, 조건 등 핵심 요소가 대부분 누락된 상태입니다.`
+    impression = '이 프롬프트는 AI가 요청의 핵심을 파악하기 어려운 구조입니다. 맥락이나 목적에 대한 정보가 충분하지 않아, AI가 방향을 임의로 설정할 가능성이 높습니다.'
   }
-  sections.push(quality)
+  sections.push(impression)
 
-  // [2] 구조적 분석
-  const sentenceDesc = a.sentenceCount === 1 ? '단일 문장' : `${a.sentenceCount}개의 문장`
-  const lenDesc = a.charCount < 30 ? '매우 짧은' : a.charCount < 80 ? '단문' : a.charCount < 200 ? '적절한 길이의' : '장문'
-  const nounDesc = a.nouns.length === 0 ? '명확한 명사 구조 없이' : `${a.nouns.length}개의 명사 구조가`
-  const verbDesc = a.verbs.length === 0 ? '동사 표현이 확인되지 않으며' : `동사 ${a.verbs.length}개가 포함되어`
-  sections.push(
-    `구조적으로 살펴보면, 입력 문장은 ${sentenceDesc}으로 구성된 ${lenDesc} 텍스트입니다. ${nounDesc} 포함되어 있고, ${verbDesc}, 평균 문장 길이는 ${Math.round(a.avgSentenceLen)}단어 수준입니다. ${a.sentenceCount < 2 ? '복문 구조나 조건 표현은 나타나지 않습니다.' : '복문 구조가 활용되어 기본적인 문장 완성도는 확보되었습니다.'}`
-  )
+  // ② AI가 헷갈릴 수 있는 부분
+  const confusions: string[] = []
+  if (a.abstractWords.length >= 2) {
+    confusions.push(`"${a.abstractWords.slice(0, 2).join('", "')}"와 같은 표현은 해석 기준이 명확하지 않아 결과가 일관되지 않을 가능성이 있습니다.`)
+  }
+  if (!a.hasTarget) {
+    confusions.push('대상이나 맥락이 명시되지 않아 AI가 어떤 수준의 사용자를 위해 답해야 하는지 판단하기 어렵습니다.')
+  }
+  if (!a.hasOutputFormat) {
+    confusions.push('원하는 출력 형식이 정해지지 않아 결과물의 형태가 매번 달라질 수 있습니다.')
+  }
+  if (!a.hasPurpose) {
+    confusions.push('이 요청이 어떤 목적이나 상황을 위한 것인지 맥락이 부족합니다.')
+  }
+  if (confusions.length > 0) {
+    sections.push(confusions.slice(0, 2).join(' '))
+  }
 
-  // [3] 어휘 다양성 분석
-  const ttrLevel = a.ttr >= 0.8 ? '높음' : a.ttr >= 0.6 ? '보통' : '낮음'
-  const absDesc = a.abstractWords.length >= 3
-    ? `"${a.abstractWords.slice(0, 2).join('", "')}"와 같은 추상적 표현이 주를 이루어`
-    : '추상어 사용은 제한적이며'
-  sections.push(
-    `어휘 다양성은 TTR 기준 ${a.ttr.toFixed(2)} 수준으로 ${ttrLevel} 범위에 해당합니다. 전체 ${a.wordCount}개 단어 중 고유 단어는 ${a.uniqueWords}개이며, 중복률은 ${Math.round(a.dupRate * 100)}%입니다. ${absDesc} 정보 밀도는 ${a.abstractWords.length >= 3 ? '낮은 편' : '적절한 수준'}입니다.`
-  )
+  // ③ 잘된 부분
+  const goods: string[] = []
+  if (details.clarityScore >= 18) goods.push('요청의 핵심 동작이 명확하게 표현되어 AI가 즉시 이해할 수 있습니다.')
+  if (details.stabilityScore >= 18) goods.push('조건이나 범위가 어느 정도 한정되어 있어 결과가 예측 가능한 방향으로 수렴할 가능성이 높습니다.')
+  if (details.sufficiencyScore >= 18) goods.push('충분한 정보와 맥락이 포함되어 있어 AI가 풍부한 답변을 생성할 수 있는 기반이 갖춰져 있습니다.')
+  if (details.predictabilityScore >= 18) goods.push('출력 형식이나 구조가 명확하게 제시되어 원하는 결과물을 얻기 수월한 구조입니다.')
+  if (a.hasPurpose) goods.push('요청의 목적이 포함되어 있어 AI가 적절한 수준의 답변을 선택할 수 있습니다.')
+  if (a.wordCount >= 20) goods.push('충분한 길이로 작성되어 있어 AI가 다양한 맥락을 활용할 수 있습니다.')
 
-  // [4] 구체성 및 정보 밀도
-  const specifics: string[] = []
-  if (!a.hasNumber) specifics.push('정량적 수치 미포함')
-  if (!a.hasProperNoun) specifics.push('고유명사 미포함')
-  if (!a.hasTechnicalTerm) specifics.push('전문 용어 미포함')
-  const concDesc = specifics.length === 0
-    ? '수치, 고유명사, 전문 용어가 고루 활용되어 구체성이 높습니다.'
-    : `${specifics.join(', ')} 등의 요소가 누락되어 구체성 점수에 영향을 미쳤습니다.`
-  sections.push(
-    `구체성 측면에서는 ${concDesc} ${a.hasTarget ? '대상 사용자가 명시되어 있어 수요 정의가 명확합니다.' : '타겟 사용자나 대상 범위가 정의되지 않아 해석의 폭이 지나치게 넓습니다.'}`
-  )
+  if (goods.length > 0) {
+    sections.push(goods.slice(0, 2).join(' '))
+  } else {
+    sections.push('기본적인 요청 구조는 갖추고 있으며, 이해하기 어렵지 않은 문장으로 작성되어 있습니다.')
+  }
 
-  // [5] 논리 전개 및 흐름
-  const logicParts: string[] = []
-  if (a.causeCount > 0) logicParts.push(`인과 표현 ${a.causeCount}건`)
-  if (a.contrastCount > 0) logicParts.push(`대조 표현 ${a.contrastCount}건`)
-  if (a.addCount > 0) logicParts.push(`첨가 표현 ${a.addCount}건`)
-  if (a.condCount > 0) logicParts.push(`조건 표현 ${a.condCount}건`)
-  const logicDesc = logicParts.length > 0
-    ? `논리 연결어 총 ${a.connectorCount}회(${logicParts.join(', ')})가 사용되어 문장 간 흐름이 구성되어 있습니다.`
-    : '인과, 대조, 조건 등의 논리 연결 표현이 사용되지 않아 논리 전개는 단선적입니다.'
-  sections.push(logicDesc)
-
-  // [6] 전략적 완성도
-  const stratOk: string[] = []
-  const stratMiss: string[] = []
-  if (a.hasPurpose) stratOk.push('목적 명시') ; else stratMiss.push('목적')
-  if (a.hasTarget) stratOk.push('대상 정의') ; else stratMiss.push('대상')
-  if (a.hasOutputFormat) stratOk.push('출력 형식') ; else stratMiss.push('출력 형식')
-  if (a.hasCondition) stratOk.push('조건 설정') ; else stratMiss.push('조건')
-  const stratDesc = stratMiss.length === 0
-    ? `목적, 대상, 출력 형식, 조건이 모두 정의되어 전략적 완성도가 높습니다.`
-    : `전략적 요소 중 ${stratOk.length > 0 ? stratOk.join(', ') + '는 충족되었으나, ' : ''}${stratMiss.join(', ')}이(가) 명시되지 않아 전략적 완성도가 제한됩니다.`
-  sections.push(stratDesc)
-
-  // [7] 개선 방향 (행동 기반)
+  // ④ 개선 방향 (행동 중심)
   const improvements: string[] = []
-  if (!a.hasNumber) improvements.push('구체적인 수치나 조건을 1~2개 이상 추가하세요')
-  if (!a.hasPurpose) improvements.push('프롬프트의 목적과 활용 맥락을 명시하세요')
-  if (!a.hasTarget) improvements.push('타겟 사용자 또는 적용 대상을 구체적으로 정의하세요')
-  if (!a.hasOutputFormat) improvements.push('원하는 출력 형식(목록, 단계별, 표 등)을 명시하세요')
-  if (a.connectorCount === 0) improvements.push('인과 관계나 조건 구조를 활용해 논리 흐름을 강화하세요')
-  if (a.wordCount < 15) improvements.push('프롬프트를 최소 2~3문장 이상으로 확장해 정보 밀도를 높이세요')
-  if (improvements.length === 0) improvements.push('현재 구조를 유지하되, 예외 케이스나 심화 조건을 추가해 완성도를 더 높일 수 있습니다')
+  if (!a.hasPurpose) improvements.push('요청의 목적이나 활용 맥락을 한 문장으로 추가해보세요.')
+  if (!a.hasTarget) improvements.push('대상 사용자나 상황을 구체적으로 명시하면 훨씬 정밀한 답변을 얻을 수 있습니다.')
+  if (!a.hasOutputFormat) improvements.push('원하는 출력 형식(예: "3가지로 나눠서", "표 형태로", "단계별로")을 지정해보세요.')
+  if (!a.hasNumber) improvements.push('수량이나 범위에 관한 숫자를 하나 추가하면 결과의 일관성이 높아집니다.')
+  if (a.abstractWords.length >= 2 && !a.hasNumber) improvements.push('추상적인 표현 대신 구체적인 기준이나 예시를 포함시켜보세요.')
 
-  const improvStr = improvements.slice(0, 3).map((imp, i) => `${i + 1}. ${imp}`).join(' ')
-  sections.push(`개선을 위해서는 다음을 권장합니다. ${improvStr}.`)
+  if (improvements.length === 0) {
+    sections.push('현재 구조를 유지하면서 예외 상황이나 심화 조건을 추가하면 더욱 완성도 높은 결과를 얻을 수 있습니다.')
+  } else {
+    const picked = improvements.slice(0, 2).join(' ')
+    sections.push(`만약 더 구체적인 결과가 필요하다면, ${picked}`)
+  }
 
   return sections.join('\n\n')
 }
 
 // ─── 강점 / 약점 생성 ─────────────────────────────────────────────
 function buildStrengthsWeaknesses(
-  ideaDetails: ReturnType<typeof scoreIdea>['details'],
-  promptDetails: ReturnType<typeof scorePromptQuality>['details'],
-  prompt: string,
+  details: { clarityScore: number; stabilityScore: number; sufficiencyScore: number; predictabilityScore: number },
+  a: ReturnType<typeof analyze>
 ): { strengths: string[]; weaknesses: string[] } {
   const strengths: string[] = []
   const weaknesses: string[] = []
 
-  if (ideaDetails.creativity >= 70) strengths.push('창의적이고 독창적인 아이디어 접근')
-  else if (ideaDetails.creativity < 50) weaknesses.push('아이디어의 독창성이 부족합니다')
+  if (details.clarityScore >= 20) strengths.push('요청 의도가 명확하게 전달됩니다')
+  else if (details.clarityScore <= 10) weaknesses.push('요청 의도가 불분명합니다')
 
-  if (ideaDetails.feasibility >= 70) strengths.push('실현 가능성이 높은 현실적 제안')
-  else if (ideaDetails.feasibility < 50) weaknesses.push('실행 가능성을 높이는 구체적 방안 필요')
+  if (details.stabilityScore >= 18) strengths.push('해석 범위가 좁아 결과 예측이 가능합니다')
+  else if (details.stabilityScore <= 8) weaknesses.push('표현이 모호해 다양한 방향으로 해석될 수 있습니다')
 
-  if (ideaDetails.specificity >= 70) strengths.push('구체적이고 명확한 문제 정의')
-  else if (ideaDetails.specificity < 50) weaknesses.push('주제에 대한 구체성과 세부 사항 보완 필요')
+  if (details.sufficiencyScore >= 18) strengths.push('충분한 정보와 맥락이 포함되어 있습니다')
+  else if (details.sufficiencyScore <= 8) weaknesses.push('정보가 부족해 AI가 임의로 내용을 채울 수 있습니다')
 
-  if (ideaDetails.marketability >= 70) strengths.push('시장 수요와의 관련성이 높음')
-  else if (ideaDetails.marketability < 50) weaknesses.push('시장 수요와 관련성을 높이는 방안 필요')
+  if (details.predictabilityScore >= 18) strengths.push('출력 형식이 명확해 원하는 결과를 얻기 쉽습니다')
+  else if (details.predictabilityScore <= 8) weaknesses.push('출력 형식 미지정으로 결과물이 매번 달라질 수 있습니다')
 
-  if (promptDetails.structureScore >= 10) strengths.push('체계적이고 논리적인 프롬프트 구조')
-  else if (promptDetails.structureScore < 5) weaknesses.push('프롬프트 구조와 논리성 개선 필요')
+  if (a.wordCount >= 20) strengths.push('충분한 분량으로 맥락이 잘 전달됩니다')
+  if (a.hasPurpose) strengths.push('목적이 명시되어 있습니다')
+  if (a.abstractWords.length >= 3) weaknesses.push('추상적 표현이 많아 결과가 불일치할 수 있습니다')
 
-  if (promptDetails.specificityScore >= 15) strengths.push('출력 형식과 조건이 구체적으로 명시됨')
-  else if (promptDetails.specificityScore < 5) weaknesses.push('원하는 출력 형식과 조건을 더 상세히 작성하세요')
-
-  if (prompt.length > 200) strengths.push('충분한 분량으로 상세한 설명 제공')
-
-  while (strengths.length < 2) strengths.push(strengths.length === 0
-    ? '주제를 이해하고 접근하려는 시도가 보입니다'
-    : '프롬프트 작성에 대한 기본 이해가 있습니다')
-  while (weaknesses.length < 2) weaknesses.push(weaknesses.length === 0
-    ? '더 구체적인 설명을 추가하면 좋겠습니다'
-    : '실행 가능한 세부 방안을 보완해보세요')
+  while (strengths.length < 2) strengths.push(
+    strengths.length === 0 ? '기본적인 요청 구조를 갖추고 있습니다' : '이해하기 어렵지 않은 문장입니다'
+  )
+  while (weaknesses.length < 2) weaknesses.push(
+    weaknesses.length === 0 ? '더 구체적인 맥락을 추가하면 좋겠습니다' : '출력 형식을 지정해보세요'
+  )
 
   return { strengths: strengths.slice(0, 3), weaknesses: weaknesses.slice(0, 3) }
 }
@@ -343,25 +227,22 @@ function buildStrengthsWeaknesses(
 export function evaluatePrompt(prompt: string, topic: string): EvaluationResult {
   if (isInvalidPrompt(prompt)) {
     return {
-      ideaScore: 0, promptScore: 0,
+      promptScore: 0,
       feedback: '유효하지 않은 입력입니다. 5자 이상의 의미 있는 프롬프트를 작성해 주세요.',
-      ideaDetails: { creativity: 0, feasibility: 0, specificity: 0, marketability: 0, trendAlignment: 0 },
-      promptDetails: { structureScore: 0, lengthScore: 0, specificityScore: 0, logicScore: 0, repetitionPenalty: 0 },
+      promptDetails: { clarityScore: 0, stabilityScore: 0, sufficiencyScore: 0, predictabilityScore: 0 },
       strengths: ['프롬프트 작성에 도전해보세요', '기본 아이디어를 정리해보세요'],
       weaknesses: ['5자 이상의 의미 있는 문장을 작성해주세요', '구체적인 주제를 포함해주세요'],
     }
   }
 
-  const ideaEval = scoreIdea(prompt, topic)
   const promptEval = scorePromptQuality(prompt)
-  const sw = buildStrengthsWeaknesses(ideaEval.details, promptEval.details, prompt)
-  const feedback = buildFeedback(prompt, ideaEval.total, promptEval.total, ideaEval.details, promptEval.details)
+  const a = analyze(prompt)
+  const sw = buildStrengthsWeaknesses(promptEval.details, a)
+  const feedback = buildFeedback(prompt, promptEval.total, promptEval.details)
 
   return {
-    ideaScore: Math.min(100, Math.max(0, ideaEval.total)),
     promptScore: Math.min(100, Math.max(0, promptEval.total)),
     feedback,
-    ideaDetails: ideaEval.details,
     promptDetails: promptEval.details,
     strengths: sw.strengths,
     weaknesses: sw.weaknesses,
