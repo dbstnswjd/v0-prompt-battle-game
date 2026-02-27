@@ -85,6 +85,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   const [totalPlayers, setTotalPlayers] = useState(0)
   const [showRanking, setShowRanking] = useState(false)
   const [rankingLoading, setRankingLoading] = useState(false)
+  const [rankingFetched, setRankingFetched] = useState(false)
 
   const finalScore = roundData.totalScore
   const grade = getGrade(finalScore)
@@ -154,6 +155,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
         setRankings(json.rankings || [])
         setMyRank(json.my_rank || null)
         setTotalPlayers(json.total_players || 0)
+        setRankingFetched(true)
       }
     } catch (e) {
       console.error('[v0] Failed to fetch ranking:', e)
@@ -162,8 +164,16 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
     }
   }, [sessionId, rankingLoading])
 
+  // Auto-fetch ranking on mount to show user's rank
+  useEffect(() => {
+    if (!rankingFetched) {
+      fetchRanking()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleToggleRanking = () => {
-    if (!showRanking && rankings.length === 0) {
+    if (!showRanking && rankings.length === 0 && !rankingFetched) {
       fetchRanking()
     }
     setShowRanking(!showRanking)
@@ -184,21 +194,121 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
     }
   }, [shareText, shareUrl])
 
+  const generateShareImage = useCallback((): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas')
+      canvas.width = 1080
+      canvas.height = 1920
+      const ctx = canvas.getContext('2d')!
+
+      // Background gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1920)
+      bgGrad.addColorStop(0, '#1e1033')
+      bgGrad.addColorStop(0.5, '#2d1b69')
+      bgGrad.addColorStop(1, '#1a0d2e')
+      ctx.fillStyle = bgGrad
+      ctx.fillRect(0, 0, 1080, 1920)
+
+      // Decorative circles
+      ctx.globalAlpha = 0.08
+      ctx.beginPath()
+      ctx.arc(200, 400, 300, 0, Math.PI * 2)
+      ctx.fillStyle = '#8b5cf6'
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(880, 1400, 250, 0, Math.PI * 2)
+      ctx.fillStyle = '#d946ef'
+      ctx.fill()
+      ctx.globalAlpha = 1
+
+      // Title
+      ctx.textAlign = 'center'
+      ctx.fillStyle = '#a78bfa'
+      ctx.font = 'bold 48px sans-serif'
+      ctx.fillText('PROMPT BATTLE', 540, 500)
+
+      // Score circle
+      const scoreGrad = ctx.createLinearGradient(390, 650, 690, 1050)
+      scoreGrad.addColorStop(0, '#8b5cf6')
+      scoreGrad.addColorStop(1, '#d946ef')
+      ctx.beginPath()
+      ctx.arc(540, 850, 200, 0, Math.PI * 2)
+      ctx.strokeStyle = scoreGrad
+      ctx.lineWidth = 12
+      ctx.stroke()
+
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 140px sans-serif'
+      ctx.fillText(`${finalScore}`, 540, 890)
+      ctx.font = 'bold 36px sans-serif'
+      ctx.fillStyle = '#c4b5fd'
+      ctx.fillText('SCORE', 540, 945)
+
+      // Grade
+      ctx.font = 'bold 72px sans-serif'
+      ctx.fillStyle = '#fbbf24'
+      ctx.fillText(grade, 540, 1130)
+
+      // Rank (if available)
+      if (myRank) {
+        ctx.font = 'bold 42px sans-serif'
+        ctx.fillStyle = '#fbbf24'
+        ctx.fillText(`${myRank}위 / ${totalPlayers}명`, 540, 1220)
+      }
+
+      // Scores breakdown
+      const detailY = myRank ? 1320 : 1280
+      ctx.font = '36px sans-serif'
+      ctx.fillStyle = '#e2d9f3'
+      ctx.fillText(`아이디어  ${roundData.ideaScore}점  |  프롬프트  ${roundData.promptScore}점`, 540, detailY)
+
+      // Footer
+      ctx.font = '28px sans-serif'
+      ctx.fillStyle = '#7c6faa'
+      ctx.fillText('프롬프트는 감각이 아니라 설계다', 540, 1700)
+      ctx.font = '24px sans-serif'
+      ctx.fillText('AI가 판단한다.', 540, 1750)
+
+      canvas.toBlob((blob) => resolve(blob!), 'image/png')
+    })
+  }, [finalScore, grade, roundData.ideaScore, roundData.promptScore, myRank, totalPlayers])
+
   const handleInstagramShare = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(shareText)
-      setShareMessage('텍스트가 복사되었습니다! 인스타그램 스토리에 붙여넣기 하세요.')
+      const blob = await generateShareImage()
+      const file = new File([blob], 'prompt-battle-result.png', { type: 'image/png' })
+
+      // Try Web Share API with file (works on mobile for Instagram Story)
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: '프롬프트 배틀 결과',
+          text: shareText,
+        })
+        return
+      }
+
+      // Fallback: download image and guide user
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'prompt-battle-result.png'
+      a.click()
+      URL.revokeObjectURL(url)
+
+      setShareMessage('이미지가 저장되었습니다! 인스타그램 스토리에 업로드하세요.')
       setTimeout(() => setShareMessage(''), 3000)
+
       if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-        window.location.href = 'instagram://app'
-      } else {
-        window.open('https://www.instagram.com/', '_blank')
+        setTimeout(() => {
+          window.location.href = 'instagram://story-camera'
+        }, 500)
       }
     } catch {
-      setShareMessage('복사에 실패했습니다.')
+      setShareMessage('공유에 실패했습니다. 다시 시도해주세요.')
       setTimeout(() => setShareMessage(''), 2000)
     }
-  }, [shareText])
+  }, [shareText, generateShareImage])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
@@ -253,6 +363,24 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
               <p className="text-2xl font-bold text-white">{roundData.promptScore}</p>
             </div>
           </div>
+
+          {/* My Rank Badge */}
+          {myRank && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.2 }}
+              className="mt-5 inline-flex items-center gap-3 px-6 py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl"
+            >
+              <Trophy className="w-5 h-5 text-amber-400" />
+              <div className="flex items-baseline gap-1">
+                <span className="text-sm text-amber-200/70">나의 순위</span>
+                <span className="text-2xl font-bold text-amber-400 mx-1">{myRank}</span>
+                <span className="text-sm text-amber-200/70">위</span>
+                <span className="text-xs text-amber-200/40 ml-1">/ {totalPlayers}명</span>
+              </div>
+            </motion.div>
+          )}
         </div>
 
         {showDetails && (
@@ -465,7 +593,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
                   className="py-4 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] hover:opacity-90 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
                 >
                   <InstagramIcon className="w-5 h-5" />
-                  <span>인스타 공유</span>
+                  <span>인스타 스토리</span>
                 </motion.button>
               </div>
 
