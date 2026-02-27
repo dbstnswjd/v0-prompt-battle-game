@@ -134,16 +134,21 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
     try {
       const params = new URLSearchParams()
       if (sessionId) params.set('session_id', sessionId)
-      const res = await fetch(`/api/game/ranking?${params.toString()}`)
+      const url = `/api/game/ranking?${params.toString()}`
+      console.log('[v0] Fetching ranking:', url)
+      const res = await fetch(url)
       const json = await res.json()
+      console.log('[v0] Ranking response:', res.status, json)
       if (res.ok) {
         setRankings(json.rankings || [])
         setMyRank(json.my_rank || null)
         setTotalPlayers(json.total_players || 0)
         setRankingFetched(true)
+      } else {
+        console.error('[v0] Ranking API error:', json)
       }
     } catch (e) {
-      console.error('Failed to fetch ranking:', e)
+      console.error('[v0] Failed to fetch ranking:', e)
     } finally {
       setRankingLoading(false)
     }
