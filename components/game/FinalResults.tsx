@@ -448,10 +448,13 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 <span className="font-semibold text-white">프롬프트 구조 평가</span>
                 <span className="ml-auto text-lg font-bold text-white">{roundData.promptScore}점</span>
               </div>
-              <ScoreBar label="이해 명확도" score={Math.round((roundData.promptDetails.clarityScore / 25) * 100)} />
-              <ScoreBar label="해석 범위 안정성" score={Math.round((roundData.promptDetails.stabilityScore / 25) * 100)} />
-              <ScoreBar label="정보 충분성" score={Math.round((roundData.promptDetails.sufficiencyScore / 25) * 100)} />
-              <ScoreBar label="결과 예측 가능성" score={Math.round((roundData.promptDetails.predictabilityScore / 25) * 100)} />
+              <ScoreBar label="요구 명확도" score={Math.round((roundData.promptDetails.reqClarity / 15) * 100)} />
+              <ScoreBar label="정보 충분성" score={Math.round((roundData.promptDetails.infoSufficiency / 15) * 100)} />
+              <ScoreBar label="구체성 수준" score={Math.round((roundData.promptDetails.specificity / 15) * 100)} />
+              <ScoreBar label="해석 안정성" score={Math.round((roundData.promptDetails.interpStability / 10) * 100)} />
+              <ScoreBar label="실행 가능성" score={Math.round((roundData.promptDetails.executability / 15) * 100)} />
+              <ScoreBar label="구조 조직력" score={Math.round((roundData.promptDetails.structureOrg / 10) * 100)} />
+              <ScoreBar label="의도 일관성" score={Math.round((roundData.promptDetails.intentConsist / 10) * 100)} />
             </div>
 
             {/* AI Feedback */}
@@ -723,7 +726,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 className="w-full py-4 bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-violet-200 font-semibold rounded-xl transition-all flex items-center justify-center gap-2"
               >
                 <RotateCcw className="w-5 h-5" />
-                <span>다시 도전하기</span>
+                <span>다시 도���하기</span>
               </button>
             </div>
           </motion.div>
