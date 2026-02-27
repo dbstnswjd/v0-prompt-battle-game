@@ -23,12 +23,8 @@ export interface RoundData {
 
 export type GameStage =
   | 'phone'
-  | 'writing-1'
-  | 'evaluating-1'
-  | 'evaluation-1'
-  | 'writing-2'
-  | 'evaluating-2'
-  | 'evaluation-2'
+  | 'writing'
+  | 'evaluating'
   | 'results'
 
 export type Grade = 'S' | 'A' | 'B' | 'C' | 'D'
