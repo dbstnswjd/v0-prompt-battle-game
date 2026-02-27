@@ -201,15 +201,12 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   useEffect(() => {
     const initKakao = () => {
       const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
-      console.log('[v0] Kakao init attempt, key exists:', !!kakaoKey, 'Kakao loaded:', !!window.Kakao)
       if (!kakaoKey) return
       if (window.Kakao && !window.Kakao.isInitialized()) {
         window.Kakao.init(kakaoKey)
         kakaoInitialized.current = true
-        console.log('[v0] Kakao SDK initialized successfully')
       } else if (window.Kakao?.isInitialized()) {
         kakaoInitialized.current = true
-        console.log('[v0] Kakao SDK already initialized')
       }
     }
 
@@ -227,7 +224,6 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   }, [])
 
   const handleKakaoShare = useCallback(() => {
-    console.log('[v0] handleKakaoShare called, Kakao:', !!window.Kakao, 'initialized:', window.Kakao?.isInitialized())
     if (!window.Kakao || !window.Kakao.isInitialized()) {
       setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
       setTimeout(() => setShareMessage(''), 2000)
