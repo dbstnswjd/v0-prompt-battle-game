@@ -340,37 +340,59 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
 
   const handleInstagramShare = useCallback(async () => {
     try {
-      setShareMessage('이미지 생성 중...')
+      setShareMessage('스토리 이미지 생성 중...')
       const blob = await generateShareImage()
-      const file = new File([blob], 'prompt-battle-result.png', { type: 'image/png' })
-      setShareMessage('')
+
+      // Convert blob to base64 data URL for the API
+      const reader = new FileReader()
+      const dataUrl: string = await new Promise((resolve) => {
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      })
+
+      setShareMessage('인스타그램 스토리로 이동 중...')
+
+      // Upload image to our API and get a public URL back
+      const uploadRes = await fetch('/api/game/share-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData: dataUrl }),
+      })
+
+      if (!uploadRes.ok) throw new Error('Upload failed')
+
+      const { imageUrl } = await uploadRes.json()
 
       const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent)
+      const isIOS = /iPhone|iPad/i.test(navigator.userAgent)
 
-      // Mobile: Use Web Share API -> opens system share sheet -> user taps Instagram Stories
-      if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-        })
-        return
-      }
-
-      // Mobile fallback: copy image to clipboard and open Instagram Stories URL scheme
       if (isMobile) {
-        try {
-          await navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': blob })
-          ])
-        } catch {
-          // clipboard write may fail, continue anyway
+        // Try opening Instagram Stories directly with the image URL
+        if (isIOS) {
+          // iOS: Use instagram-stories URL scheme
+          window.location.href = `instagram-stories://share?source_application=web&backgroundImage=${encodeURIComponent(imageUrl)}`
+        } else {
+          // Android: Use intent
+          window.location.href = `intent://share?source_application=web&backgroundImage=${encodeURIComponent(imageUrl)}#Intent;scheme=instagram-stories;package=com.instagram.android;end`
         }
-        window.location.href = 'instagram-stories://share'
-        setShareMessage('인스타그램 스토리가 열립니다. 이미지를 붙여넣기 하세요!')
-        setTimeout(() => setShareMessage(''), 4000)
+
+        // Fallback: after 2 seconds if app didn't open, try Web Share API with file
+        setTimeout(async () => {
+          const file = new File([blob], 'prompt-battle-result.png', { type: 'image/png' })
+          if (navigator.share && navigator.canShare?.({ files: [file] })) {
+            try {
+              await navigator.share({ files: [file] })
+            } catch {
+              // User cancelled, ignore
+            }
+          }
+        }, 2000)
+
+        setShareMessage('')
         return
       }
 
-      // Desktop: Download image and guide
+      // Desktop: Download the image for manual upload
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -379,11 +401,9 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-
       setShareMessage('이미지가 저장되었습니다! 모바일에서 인스타그램 스토리에 업로드하세요.')
       setTimeout(() => setShareMessage(''), 4000)
     } catch (err) {
-      // User cancelled share sheet - not an error
       if (err instanceof Error && err.name === 'AbortError') {
         setShareMessage('')
         return
