@@ -179,7 +179,8 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
     setShowRanking(!showRanking)
   }
 
-  const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!\n아이디어: ${roundData.ideaScore}점 | 프롬프트: ${roundData.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. AI가 판단한다.`
+  const rankText = myRank ? `\n현재 순위: ${myRank}위 / ${totalPlayers}명` : ''
+  const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!${rankText}\n아이디어: ${roundData.ideaScore}점 | 프롬프트: ${roundData.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. AI가 판단한다.`
   const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
 
   const handleKakaoShare = useCallback(() => {
@@ -275,40 +276,58 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
 
   const handleInstagramShare = useCallback(async () => {
     try {
+      setShareMessage('이미지 생성 중...')
       const blob = await generateShareImage()
       const file = new File([blob], 'prompt-battle-result.png', { type: 'image/png' })
+      setShareMessage('')
 
-      // Try Web Share API with file (works on mobile for Instagram Story)
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent)
+
+      // Mobile: Use Web Share API -> opens system share sheet -> user taps Instagram Stories
+      if (isMobile && navigator.share && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: '프롬프트 배틀 결과',
-          text: shareText,
         })
         return
       }
 
-      // Fallback: download image and guide user
+      // Mobile fallback: copy image to clipboard and open Instagram Stories URL scheme
+      if (isMobile) {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ])
+        } catch {
+          // clipboard write may fail, continue anyway
+        }
+        window.location.href = 'instagram-stories://share'
+        setShareMessage('인스타그램 스토리가 열립니다. 이미지를 붙여넣기 하세요!')
+        setTimeout(() => setShareMessage(''), 4000)
+        return
+      }
+
+      // Desktop: Download image and guide
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = 'prompt-battle-result.png'
+      document.body.appendChild(a)
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      setShareMessage('이미지가 저장되었습니다! 인스타그램 스토리에 업로드하세요.')
-      setTimeout(() => setShareMessage(''), 3000)
-
-      if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-        setTimeout(() => {
-          window.location.href = 'instagram://story-camera'
-        }, 500)
+      setShareMessage('이미지가 저장되었습니다! 모바일에서 인스타그램 스토리에 업로드하세요.')
+      setTimeout(() => setShareMessage(''), 4000)
+    } catch (err) {
+      // User cancelled share sheet - not an error
+      if (err instanceof Error && err.name === 'AbortError') {
+        setShareMessage('')
+        return
       }
-    } catch {
       setShareMessage('공유에 실패했습니다. 다시 시도해주세요.')
       setTimeout(() => setShareMessage(''), 2000)
     }
-  }, [shareText, generateShareImage])
+  }, [generateShareImage])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
