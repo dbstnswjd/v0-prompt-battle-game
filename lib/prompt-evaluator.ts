@@ -596,7 +596,7 @@ function scoreAll(text: string): { details: PromptDetails; raw: number } {
   //                          + executability15 + structureOrg10 + intentConsist10)
   //                          + bonus(10) = 140 (보조 지표는 피드백 분기용이며 raw에서 1/3 가중)
   // 실제 raw 설계: A + B가 핵심(50) + 보조지표 절반 + bonus
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ━━━━━━━━━━━━━━━━━��━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   // 보조 지표는 0.4 가중치로 합산 (총 raw max ≈ 100)
   const supportRaw = Math.round(
@@ -931,10 +931,65 @@ function buildStrengthsWeaknesses(d: PromptDetails, a: ReturnType<typeof analyze
   return { strengths: [] as string[], weaknesses: weaknesses.slice(0, 5) }
 }
 
+// ─── 0단계: 기능 존재 여부 게이트 ───────────────────────────────────
+// 5개 판별 질문에 하나도 통과하지 못하면 즉시 0점 반환
+interface Stage0Result {
+  passed: boolean
+  passedCount: number   // 통과한 질문 수 (0–5)
+  failedQuestions: string[]  // 통과 실패한 질문 목록
+}
+
+function checkStage0Gate(text: string): Stage0Result {
+  const t = text.trim()
+  const failedQuestions: string[] = []
+
+  // Q1. 사용자 행동이 정의되어 있는가?
+  const q1 = /(?:선택|입력|클릭|스크롤|탭|필터|검색|업로드|다운로드|설정|조회|등록|삭제|수정|확인|제출|전송|로그인|가입|신청|주문|결제|구매|예약|사용|이용|접속|실행|시작|열면|켜면|종료|나가면|뒤로|공유|저장|불러오기)/i.test(t)
+  if (!q1) failedQuestions.push('사용자 행동이 정의되어 있지 않습니다.')
+
+  // Q2. 시스템 동작이 정의되어 있는가?
+  const q2 = /(?:보여|표시|저장|전송|생성|업데이트|갱신|알림|분석|추천|계산|처리|응답|반환|출력|렌더|로드|불러|제공|연결|인증|검증|허용|차단|필터링|정렬|집계|시각화|변환|번역|요약|검색 결과)/i.test(t)
+  if (!q2) failedQuestions.push('시스템 동작(반응)이 정의되어 있지 않습니다.')
+
+  // Q3. 입력 또는 출력이 언급되어 있는가?
+  const q3 = /(?:입력|출력|데이터|정보|값|결과|화면|페이지|목록|리스트|표|차트|그래프|텍스트|숫자|날짜|이미지|파일|form|폼|필드|항목|내용|메시지|알림|피드백|응답)/i.test(t)
+  if (!q3) failedQuestions.push('입력 또는 출력이 전혀 언급되지 않았습니다.')
+
+  // Q4. 실행 조건이 있는가? (이 기준은 완화: 없어도 0점 처리하지 않음 — 보조 판별용)
+  const q4 = /(?:만약|조건|경우|때는|이라면|다면|단,|필수|선택|제한|예외|권한|로그인한|비로그인|미입력|오류|실패|성공|완료)/i.test(t)
+  // Q4는 보조 판별 — 실패해도 failedQuestions에만 기록, passedCount에 반영
+
+  // Q5. 최소 1개 이상의 구체 기능이 존재하는가?
+  // 단순히 "만들어줘" 수준이 아닌 기능 단위가 식별 가능해야 함
+  const hasFuncKeyword = /(?:기능|화면|페이지|메뉴|버튼|탭|섹션|모듈|서비스|앱|시스템|플랫폼|게시판|댓글|회원|프로필|대시보드|관리|통계|보고|피드|리뷰|채팅|결제|배송|예약|알림|설정|검색|필터|추천|분석|API|인터페이스)/i.test(t)
+  const hasActionableTask = /(?:작성|분석|비교|생성|만들|설계|구현|요약|정리|추천|설명|조사|평가|기획|개발|계획|제안|작성해|분석해|만들어|설계해|구현해|개발해|기획해)/i.test(t)
+  const q5 = hasFuncKeyword || hasActionableTask
+  if (!q5) failedQuestions.push('구체적인 기능이나 작업 대상이 전혀 식별되지 않습니다.')
+
+  if (!q4) failedQuestions.push('실행 조건이 명시되어 있지 않습니다. (가점 요소)')
+
+  const passedCount = [q1, q2, q3, q4, q5].filter(Boolean).length
+
+  // 핵심 3개 (Q1·Q2·Q5) 중 2개 이상 실패 → 기능 없음으로 판단
+  const coreFailCount = [!q1, !q2, !q5].filter(Boolean).length
+  const passed = coreFailCount < 2
+
+  return { passed, passedCount, failedQuestions }
+}
+
+// ─── 0단계 실패 시 반환 ───────────────────────────────────────────
+const ZERO_DETAILS: PromptDetails = {
+  funcCompleteness: 0, funcA1: 0, funcA2: 0, funcA3: 0, funcA4: 0, funcA5: 0,
+  specificityScore: 0, specB1: 0, specB2: 0, specB3: 0, specB4: 0, specB5: 0,
+  reqClarity: 0, infoSufficiency: 0, funcSpec: 0,
+  interpStability: 0, executability: 0, structureOrg: 0, intentConsist: 0,
+  bonus: 0, ultraPenalty: 0,
+}
+
 // ─── 메인 ─────────────────────────────────────────────────────────
 export function evaluatePrompt(prompt: string, _topic: string): EvaluationResult {
+  // ── Hard filter (노래 가사·일상 대화·무의미 입력) ──
   if (isInvalidPrompt(prompt)) {
-    // 노래 가사·일상 대화 여부에 따라 피드백 메시지 구분
     const isNonPrompt = isNonPromptText(prompt.trim())
     const feedback = isNonPrompt
       ? '노래 가사, 일상 대화, 감탄사 등은 프롬프트로 인정되지 않습니다. AI에게 무언가를 만들거나 분석하도록 지시하는 문장을 작성해 주세요.'
@@ -942,18 +997,35 @@ export function evaluatePrompt(prompt: string, _topic: string): EvaluationResult
     return {
       promptScore: 0,
       feedback,
-      promptDetails: {
-        funcCompleteness: 0, funcA1: 0, funcA2: 0, funcA3: 0, funcA4: 0, funcA5: 0,
-        specificityScore: 0, specB1: 0, specB2: 0, specB3: 0, specB4: 0, specB5: 0,
-        reqClarity: 0, infoSufficiency: 0, funcSpec: 0,
-        interpStability: 0, executability: 0, structureOrg: 0, intentConsist: 0,
-        bonus: 0, ultraPenalty: 0,
-      },
+      promptDetails: { ...ZERO_DETAILS },
       strengths: [],
       weaknesses: [
         '프롬프트는 AI에게 작업을 지시하는 문장이어야 합니다.',
         '예: "~앱을 만들어줘", "~를 분석해줘", "~를 요약해줘"처럼 명확한 지시를 작성하세요.',
         '노래 가사, 일상 대화, 단순 감탄사는 0점 처리됩니다.',
+      ],
+    }
+  }
+
+  // ── 0단계: 기능 존재 여부 게이트 ──
+  const stage0 = checkStage0Gate(prompt)
+  if (!stage0.passed) {
+    // 어떤 질문이 실패했는지 피드백에 구체적으로 안내
+    const coreFailList = stage0.failedQuestions
+      .filter(q => !q.includes('가점'))
+      .map(q => `· ${q}`)
+      .join('\n')
+
+    return {
+      promptScore: 0,
+      feedback: `기능이 존재하지 않는 프롬프트입니다. 아래 항목을 채워야 점수를 받을 수 있습니다.\n\n${coreFailList}\n\n예시: "30대 자영업자를 위한 매출 기록 앱. 사용자가 날짜와 금액을 입력하면 월별 통계 차트로 보여준다."`,
+      promptDetails: { ...ZERO_DETAILS },
+      strengths: [],
+      weaknesses: [
+        '사용자 행동(클릭, 입력, 선택 등)이 전혀 없으면 AI는 기능을 설계할 수 없습니다.',
+        '시스템이 어떻게 반응하는지(저장, 표시, 알림 등)가 없으면 출력을 예측할 수 없습니다.',
+        '기능 단위(화면, 메뉴, 서비스 등)가 하나도 식별되지 않습니다.',
+        `5개 판별 질문 중 ${stage0.passedCount}개만 통과했습니다. 최소 핵심 2개(사용자 행동·시스템 동작·기능 식별 중 2개 이상)를 충족해야 합니다.`,
       ],
     }
   }
