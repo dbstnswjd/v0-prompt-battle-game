@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { Trophy, Share2, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, BarChart3, Lightbulb, Wrench } from 'lucide-react'
+import { PlayerRanking } from './PlayerRanking'
 import { motion } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
@@ -9,6 +10,7 @@ import { getGrade, getGradeColor } from '@/lib/game-types'
 interface FinalResultsProps {
   round1: RoundData
   round2: RoundData | null
+  sessionId: string | null
   onRestart: () => void
 }
 
@@ -54,7 +56,7 @@ function ShareButton({ onClick }: { onClick: () => void }) {
   )
 }
 
-export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
+export function FinalResults({ round1, round2, sessionId, onRestart }: FinalResultsProps) {
   const [animatedScore, setAnimatedScore] = useState(0)
   const [showDetails, setShowDetails] = useState(false)
   const [selectedRound, setSelectedRound] = useState<1 | 2>(1)
@@ -206,6 +208,9 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
+            {/* Player Ranking */}
+            <PlayerRanking sessionId={sessionId} finalScore={finalScore} />
+
             {/* Idea Score Details */}
             <div className="bg-white/[0.06] backdrop-blur-md border border-white/10 rounded-2xl p-6 space-y-4">
               <div className="flex items-center gap-2 mb-1">
