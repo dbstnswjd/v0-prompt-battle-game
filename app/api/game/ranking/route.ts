@@ -55,13 +55,16 @@ export async function GET(request: Request) {
       }
     }
 
-    // Top 10 leaderboard with masked phone numbers
-    const top10 = ranked.slice(0, 10).map((r, idx) => ({
-      rank: idx + 1,
-      phone: maskPhone(r.phone_number),
-      score: r.score,
-      isMe: sessionId ? r.session_id === sessionId : false,
-    }))
+    // Top 10 leaderboard with random nicknames
+    const top10 = ranked.slice(0, 10).map((r, idx) => {
+      const isMe = sessionId ? r.session_id === sessionId : false
+      return {
+        rank: idx + 1,
+        name: isMe ? '나' : getRandomNickname(idx, r.session_id),
+        score: r.score,
+        isMe,
+      }
+    })
 
     // Percentile (top X%)
     const totalPlayers = ranked.length
@@ -80,13 +83,22 @@ export async function GET(request: Request) {
   }
 }
 
-function maskPhone(phone: string): string {
-  // Mask middle digits: 010-1234-5678 -> 010-****-5678
-  const cleaned = phone.replace(/\D/g, '')
-  if (cleaned.length >= 8) {
-    const prefix = cleaned.slice(0, 3)
-    const suffix = cleaned.slice(-4)
-    return `${prefix}-****-${suffix}`
+const NICKNAMES = [
+  '너굴너굴', '뚝딱뚝딱', '반짝반짝', '두근두근', '살랑살랑',
+  '몽글몽글', '포근포근', '졸졸졸', '두리번두리번', '쏙쏙',
+  '알쏭달쏭', '뿌듯뿌듯', '토닥토닥', '싱글벙글', '후루룩',
+  '쓱쓱싹싹', '아기자기', '꼬물꼬물', '반들반들', '폴짝폴짝',
+  '슝슝', '콩닥콩닥', '꾸벅꾸벅', '보슬보슬', '사르르',
+  '나풀나풀', '빙글빙글', '소곤소곤', '또각또각', '찰랑찰랑',
+]
+
+function getRandomNickname(index: number, sessionId: string): string {
+  // Use a simple hash of session_id to consistently assign the same nickname per player
+  let hash = 0
+  for (let i = 0; i < sessionId.length; i++) {
+    hash = ((hash << 5) - hash) + sessionId.charCodeAt(i)
+    hash |= 0
   }
-  return phone.slice(0, 3) + '****'
+  const nicknameIdx = Math.abs(hash + index) % NICKNAMES.length
+  return NICKNAMES[nicknameIdx]
 }

@@ -11,7 +11,7 @@ interface RankingData {
   percentile: number | null
   top10: {
     rank: number
-    phone: string
+    name: string
     score: number
     isMe: boolean
   }[]
@@ -226,7 +226,7 @@ export function PlayerRanking({ sessionId, finalScore }: PlayerRankingProps) {
                               entry.isMe ? 'text-violet-300' : 'text-white/80'
                             }`}
                           >
-                            {entry.phone}
+                            {entry.name}
                           </span>
                           {entry.isMe && (
                             <span className="shrink-0 text-xs px-2 py-0.5 bg-violet-500/20 text-violet-300 rounded-full border border-violet-500/30">
