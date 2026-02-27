@@ -18,10 +18,8 @@ export async function GET(request: Request) {
     // Fetch all scores, ordered by score descending
     const { data: allScores, error } = await supabase
       .from('game_scores')
-      .select('session_id, phone_number, score')
+      .select('session_id, phone_number, score, prompt_text')
       .order('score', { ascending: false })
-
-    console.log('[v0] ranking API - error:', error, 'count:', allScores?.length, 'sessionId:', sessionId)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
@@ -36,14 +34,15 @@ export async function GET(request: Request) {
     }
 
     // Deduplicate by phone_number (keep highest score per player)
-    const bestByPhone = new Map<string, { session_id: string; score: number }>()
+    const bestByPhone = new Map<string, { session_id: string; score: number; prompt_text: string | null }>()
     for (const row of allScores) {
-      const key = row.phone_number || row.session_id // fallback to session_id if no phone
+      const key = row.phone_number || row.session_id
       const existing = bestByPhone.get(key)
       if (!existing || row.score > existing.score) {
         bestByPhone.set(key, {
           session_id: row.session_id,
           score: row.score,
+          prompt_text: row.prompt_text || null,
         })
       }
     }
@@ -62,6 +61,8 @@ export async function GET(request: Request) {
         score: entry.score,
         grade: getGrade(entry.score),
         isMe,
+        // Only include prompt_text for top 3
+        prompt_text: rank <= 3 ? entry.prompt_text : undefined,
       }
     })
 

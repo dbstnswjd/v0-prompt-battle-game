@@ -17,6 +17,7 @@ interface RankingEntry {
   score: number
   grade: string
   isMe: boolean
+  prompt_text?: string | null
 }
 
 function ScoreBar({ label, score }: { label: string; score: number }) {
@@ -71,6 +72,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
   const [rankingLoading, setRankingLoading] = useState(false)
   const [rankingFetched, setRankingFetched] = useState(false)
   const [rankingError, setRankingError] = useState<string | null>(null)
+  const [selectedPrompt, setSelectedPrompt] = useState<{ rank: number; text: string } | null>(null)
   const [downloading, setDownloading] = useState(false)
 
   const finalScore = roundData.totalScore
@@ -137,16 +139,8 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       const params = new URLSearchParams()
       if (sessionId) params.set('session_id', sessionId)
       const url = `/api/game/ranking?${params.toString()}`
-      console.log('[v0] fetchRanking url:', url)
       const res = await fetch(url)
-      const text = await res.text()
-      console.log('[v0] fetchRanking status:', res.status, 'body:', text.slice(0, 200))
-      let json
-      try { json = JSON.parse(text) } catch { json = null }
-      if (!json) {
-        setRankingError(`응답 파싱 실패 (status: ${res.status})`)
-        return
-      }
+      const json = await res.json()
       if (res.ok) {
         setRankings(json.rankings || [])
         setMyRank(json.my_rank ?? null)
@@ -157,7 +151,6 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      console.error('[v0] fetchRanking error:', msg)
       setRankingError(`네트워크 에러: ${msg}`)
     } finally {
       setRankingLoading(false)
@@ -606,41 +599,84 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
                           )}
 
                           <div className="space-y-2">
-                            {rankings.map((entry, idx) => (
-                              <div
-                                key={idx}
-                                className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${getRankBg(entry.rank, entry.isMe)}`}
-                              >
-                                <div className="w-8 text-center shrink-0">
-                                  {getRankIcon(entry.rank) || (
-                                    <span className="text-sm font-semibold text-violet-300/60">
-                                      {entry.rank}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex-1 flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-white">
-                                      {entry.isMe ? '나' : `참가자 ${entry.rank}`}
-                                    </span>
-                                    {entry.isMe && (
-                                      <span className="px-1.5 py-0.5 bg-violet-500/30 border border-violet-500/40 rounded text-[10px] text-violet-200 font-medium">
-                                        ME
+                            {rankings.map((entry, idx) => {
+                              const hasPrompt = entry.rank <= 3 && entry.prompt_text
+                              return (
+                                <div
+                                  key={idx}
+                                  onClick={() => {
+                                    if (hasPrompt) {
+                                      setSelectedPrompt({ rank: entry.rank, text: entry.prompt_text! })
+                                    }
+                                  }}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${getRankBg(entry.rank, entry.isMe)} ${hasPrompt ? 'cursor-pointer hover:bg-white/[0.08]' : ''}`}
+                                >
+                                  <div className="w-8 text-center shrink-0">
+                                    {getRankIcon(entry.rank) || (
+                                      <span className="text-sm font-semibold text-violet-300/60">
+                                        {entry.rank}
                                       </span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className={`text-xs px-2 py-0.5 rounded-full ${getGradeColor(getGrade(entry.score)).bg} ${getGradeColor(getGrade(entry.score)).text} ${getGradeColor(getGrade(entry.score)).border} border`}>
-                                      {entry.grade}
-                                    </span>
-                                    <span className="text-sm font-bold text-white tabular-nums">
-                                      {entry.score}점
-                                    </span>
+                                  <div className="flex-1 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-white">
+                                        {entry.isMe ? '나' : `참가자 ${entry.rank}`}
+                                      </span>
+                                      {entry.isMe && (
+                                        <span className="px-1.5 py-0.5 bg-violet-500/30 border border-violet-500/40 rounded text-[10px] text-violet-200 font-medium">
+                                          ME
+                                        </span>
+                                      )}
+                                      {hasPrompt && (
+                                        <span className="px-1.5 py-0.5 bg-sky-500/20 border border-sky-500/30 rounded text-[10px] text-sky-300 font-medium">
+                                          프롬프트 보기
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-xs px-2 py-0.5 rounded-full ${getGradeColor(getGrade(entry.score)).bg} ${getGradeColor(getGrade(entry.score)).text} ${getGradeColor(getGrade(entry.score)).border} border`}>
+                                        {entry.grade}
+                                      </span>
+                                      <span className="text-sm font-bold text-white tabular-nums">
+                                        {entry.score}점
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              )
+                            })}
                           </div>
+
+                          {/* Prompt Modal */}
+                          <AnimatePresence>
+                            {selectedPrompt && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 10 }}
+                                className="mt-4 bg-sky-500/[0.08] border border-sky-500/20 rounded-xl p-5"
+                              >
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-sky-400" />
+                                    <span className="text-sm font-semibold text-white">{selectedPrompt.rank}위의 프롬프트</span>
+                                  </div>
+                                  <button
+                                    onClick={() => setSelectedPrompt(null)}
+                                    className="text-xs text-violet-300/50 hover:text-violet-200 transition-colors"
+                                  >
+                                    닫기
+                                  </button>
+                                </div>
+                                <div className="bg-white/[0.04] border border-white/10 rounded-lg p-4 max-h-48 overflow-y-auto">
+                                  <p className="text-sm text-violet-100/80 whitespace-pre-wrap break-words leading-relaxed">
+                                    {selectedPrompt.text}
+                                  </p>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </>
                       )}
                     </div>
