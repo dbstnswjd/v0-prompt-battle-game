@@ -260,25 +260,188 @@ function calcFinalScore(raw: number): number {
   return Math.max(0, Math.min(100, 50 + (raw - 50)))
 }
 
-// ─── 자연어 총평 생성 ─────────────────────────────────────────────
+// ─── Adaptive Feedback Engine v1 ──────────────────────────────────
+
+type ProblemType = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G'
+
+function classifyTypes(d: PromptDetails, a: ReturnType<typeof analyze>): ProblemType[] {
+  const types: { type: ProblemType; weight: number }[] = []
+
+  // TYPE_A: 목적 불명확형
+  if (d.reqClarity <= 6 && !a.hasPurpose) types.push({ type: 'A', weight: 3 })
+  else if (d.reqClarity <= 9) types.push({ type: 'A', weight: 1 })
+
+  // TYPE_B: 기능 부족형
+  if (d.funcSpec <= 4 && !a.hasFuncName) types.push({ type: 'B', weight: 3 })
+  else if (d.funcSpec <= 8) types.push({ type: 'B', weight: 1 })
+
+  // TYPE_C: 맥락 부족형 (타겟 사용자 포함)
+  if (!a.hasTargetUserWho && d.infoSufficiency <= 8) types.push({ type: 'C', weight: 3 })
+  else if (d.infoSufficiency <= 12) types.push({ type: 'C', weight: 1 })
+
+  // TYPE_D: 과도한 모호 표현형
+  if (a.vagueWords.length >= 3 && d.interpStability <= 5) types.push({ type: 'D', weight: 2 })
+  else if (a.vagueWords.length >= 2) types.push({ type: 'D', weight: 1 })
+
+  // TYPE_E: 구조 미흡형
+  if (d.structureOrg <= 3 && d.executability <= 5) types.push({ type: 'E', weight: 2 })
+
+  // TYPE_F: 거의 완성형
+  if (d.reqClarity >= 11 && d.infoSufficiency >= 14 && d.funcSpec >= 10) types.push({ type: 'F', weight: 3 })
+
+  // TYPE_G: 충돌/모순 포함형
+  if (a.toneConflict || a.scopeConflict || a.hasDuplicateInstructions) types.push({ type: 'G', weight: 3 })
+
+  types.sort((a, b) => b.weight - a.weight)
+  const primary = types[0]?.type
+  const secondaries = types.slice(1, 3).map(t => t.type)
+  return primary ? [primary, ...secondaries] : ['A']
+}
+
 function buildFeedback(
   text: string,
   score: number,
   d: PromptDetails
 ): string {
   const a = analyze(text)
+  const types = classifyTypes(d, a)
+  const primary = types[0]
   const parts: string[] = []
 
-  // ① 전반적 인상
-  if (score >= 80) {
-    parts.push('이 프롬프트는 전반적으로 AI가 요청 의도를 즉시 파악하고 일관된 결과를 생성할 수 있는 수준으로 작성되어 있습니다. 요청의 방향이 명확하고, 출력 조건이 충분히 구체화되어 있어 높은 완성도의 결과물을 기대할 수 있습니다.')
-  } else if (score >= 65) {
-    parts.push('이 프롬프트는 기본적인 방향성은 잘 전달되지만, 해석의 여지가 다소 열려 있어 AI 출력이 의도와 다소 달라질 가능성이 있습니다. 결과가 예측 가능한 범위 안에서 나오겠지만, 더 정밀한 결과를 원한다면 추가 구체화가 필요합니다.')
-  } else if (score >= 45) {
-    parts.push('이 프롬프트는 요청 의도가 부분적으로 전달되지만, AI 입장에서 방향을 스스로 결정해야 하는 부분이 상당히 많습니다. 원하는 결과와 실제 결과가 달라질 가능성이 높으므로, 구조적 보완이 필요합니다.')
-  } else {
-    parts.push('이 프롬프트는 AI가 핵심 요청을 파악하기 어려운 구조입니다. 맥락, 조건, 출력 형식에 대한 정보가 충분하지 않아 AI가 방향을 임의로 설정할 가능성이 높습니다. 전반적인 재작성을 권장합니다.')
+  // ── 1단계: 한 줄 진단 (매번 다른 표현, 프롬프트 유형별 맞춤) ──
+  const diagnosisMap: Record<ProblemType, string[]> = {
+    A: [
+      '요청의 방향은 감지되지만 AI가 목적을 확신하기 어려운 구조입니다.',
+      '무엇을 원하는지 알 것 같으면서도, AI가 해석을 스스로 완성해야 하는 프롬프트입니다.',
+      '의도가 흐릿하게 전달됩니다. AI가 추측해서 채워야 할 빈칸이 많습니다.',
+    ],
+    B: [
+      '기능 구상은 느껴지지만, AI가 실제로 설계하기엔 정보가 부족합니다.',
+      '만들고 싶은 것은 있는데, 무엇을 어떻게 만들어야 하는지 AI에게 전달되지 않았습니다.',
+      '기능 목록이 있어도 인터랙션 흐름 없이는 AI가 껍데기 수준의 결과만 냅니다.',
+    ],
+    C: [
+      '누구를 위한 것인지, 어떤 상황에서 쓰이는지가 빠져 있습니다.',
+      '배경이 없으면 AI는 가장 평범한 가정으로 채웁니다. 지금 이 프롬프트가 그 상태입니다.',
+      '타겟과 맥락이 없으면 AI 출력은 가장 일반적인 방향으로 흐릅니다.',
+    ],
+    D: [
+      `"${a.vagueWords.slice(0, 2).join('", "')}" 같은 표현이 프롬프트의 해석 범위를 넓혀놓고 있습니다.`,
+      '표현 자체는 자연스럽지만, AI가 기준을 잡기 어려운 단어들이 섞여 있습니다.',
+      '모호한 수식어가 많을수록 AI 출력은 매번 다른 방향으로 수렴합니다.',
+    ],
+    E: [
+      '요청 내용이 하나의 덩어리로 뭉쳐 있어 AI가 우선순위를 잡기 어렵습니다.',
+      '구조 없이 나열된 요구사항은 AI가 순서대로 처리하지 않을 수 있습니다.',
+      '읽기 어렵지는 않지만, AI가 어디서 시작해 어디서 끝내야 할지 불분명합니다.',
+    ],
+    F: [
+      '프롬프트 설계 측면에서 높은 완성도를 보입니다.',
+      '구조, 맥락, 지시가 잘 갖춰진 프롬프트입니다.',
+      '대부분의 요소가 제자리에 있습니다. 이 수준이면 AI가 의도에 가깝게 동작합니다.',
+    ],
+    G: [
+      '내부에서 충돌하는 지시가 발견됩니다. AI가 어느 쪽을 따를지 결정하지 못할 수 있습니다.',
+      '모순된 요건이 섞여 있어 AI 출력이 일관되지 않을 가능성이 높습니다.',
+      '지시들이 서로 다른 방향을 가리키고 있습니다.',
+    ],
   }
+
+  const diagOptions = diagnosisMap[primary]
+  const diagIndex = (d.reqClarity + d.infoSufficiency) % diagOptions.length
+  parts.push(diagOptions[diagIndex])
+
+  // ── 2단계: 문제 유형별 맞춤 분석 (TYPE별 코칭 톤 적용) ──
+  const secondPart: string[] = []
+
+  if (primary === 'A' || types.includes('A')) {
+    // 방향 제시형 코칭
+    if (!a.hasPurpose)
+      secondPart.push('이 프롬프트에는 요청의 목적이 빠져 있습니다. "~을 위해", "~상황에서 사용할" 같은 맥락 문장 하나가 AI의 응답 방향을 완전히 바꿉니다.')
+    if (a.abstractVerbs.length >= 1)
+      secondPart.push(`"${a.abstractVerbs[0]}" 같은 추상적 지시 대신 "작성해줘", "단계별로 설명해줘"처럼 AI가 즉시 실행할 수 있는 동사로 바꿔보세요.`)
+  }
+
+  if (primary === 'B' || types.includes('B')) {
+    // 방향 제시형 코칭
+    if (!a.hasUserAction && !a.hasSystemResponse)
+      secondPart.push('사용자가 버튼을 누르면 무슨 일이 생기는지, 어떤 화면이 나오는지, 이 흐름이 없으면 AI는 기능을 나열만 하고 설계하지 않습니다.')
+    if (!a.hasDataFlow && a.hasFuncName)
+      secondPart.push('기능 이름은 있지만 데이터가 어떻게 흐르는지가 없습니다. "입력하면 저장되고, 저장되면 목록에 표시된다"처럼 한 줄이라도 흐름을 써보세요.')
+  }
+
+  if (primary === 'C' || types.includes('C')) {
+    // 명확화 유도형
+    if (!a.hasTargetUserWho)
+      secondPart.push('이 프롬프트에서 가장 크게 빠진 정보는 "누구를 위한 것인가"입니다. 타겟 사용자를 명시하면 AI가 어휘 수준, 기능 우선순위, 설명 방식 모두를 맞춰서 응답합니다.')
+    else if (!a.hasTargetAge && !a.hasTargetContext)
+      secondPart.push('대상이 누구인지는 언급됐지만, 그들이 어떤 상황에서 어떤 방식으로 쓰는지가 없습니다. 사용 맥락을 한 문장 추가해보세요.')
+    if (!a.hasBackground)
+      secondPart.push('왜 이것이 필요한지, 어떤 문제를 해결하려는지 배경 한 줄이 있으면 AI가 방향을 추측하지 않아도 됩니다.')
+  }
+
+  if (primary === 'D' || types.includes('D')) {
+    // 명확화 유도형
+    if (a.vagueWords.length >= 2)
+      secondPart.push(`"${a.vagueWords.slice(0, 2).join('", "')}" 같은 표현은 사람마다, AI마다 다르게 해석됩니다. 이 단어들을 "3줄 이내", "초등학생도 이해할 수 있는 수준"처럼 측정 가능한 기준으로 바꾸면 결과 일관성이 올라갑니다.`)
+  }
+
+  if (primary === 'E' || types.includes('E')) {
+    // 구조 개선형
+    if (d.structureOrg <= 4)
+      secondPart.push('요청, 배경, 조건이 하나의 문장 안에 뒤섞여 있습니다. 이 세 가지를 분리해서 작성하면 AI가 각각을 독립적으로 처리하고 더 정확한 결과를 냅니다.')
+    if (!a.hasSteps && d.executability <= 7)
+      secondPart.push('복잡한 요청일수록 "먼저 ~ 다음으로 ~ 마지막으로"처럼 단계를 구분해주면 AI가 순서를 지켜서 처리합니다.')
+  }
+
+  if (primary === 'F') {
+    // 고급 최적화형
+    secondPart.push('이 수준의 프롬프트에서 더 나아가려면 예외 상황이나 엣지 케이스를 추가하는 것이 효과적입니다. "만약 ~한 경우에는 ~하게 처리해줘" 형태의 조건을 넣으면 AI 응답의 견고성이 높아집니다.')
+    if (!a.hasRole)
+      secondPart.push('역할을 지정(예: "당신은 10년 경력의 UX 디자이너입니다")하면 같은 질문이라도 더 전문적인 관점의 응답이 나옵니다.')
+  }
+
+  if (primary === 'G' || types.includes('G')) {
+    // 충돌 해결형
+    if (a.toneConflict)
+      secondPart.push('톤과 관련해 충돌하는 표현이 감지됩니다. 예: "전문적으로"와 "쉽게"를 동시에 요구하면 AI가 어느 쪽도 제대로 못 지킵니다. 우선순위를 정해주세요.')
+    if (a.scopeConflict)
+      secondPart.push('범위와 관련해 충돌이 있습니다. "모두", "전부"와 "간단히", "요약"이 함께 있으면 AI가 임의로 하나를 선택합니다. 명확하게 하나만 선택해보세요.')
+    if (a.hasDuplicateInstructions)
+      secondPart.push('비슷한 지시가 반복되어 AI가 같은 내용을 여러 번 처리하거나 혼란스러워할 수 있습니다. 중복된 요구를 하나로 통합해보세요.')
+  }
+
+  if (secondPart.length > 0) {
+    parts.push(secondPart.slice(0, 2).join('\n\n'))
+  }
+
+  // ── 3단계: 행동 가능한 개선 방향 (1~2개, 구체적 예시 포함) ──
+  const actions: string[] = []
+
+  if (primary !== 'F') {
+    if (!a.hasTargetUserWho)
+      actions.push('타겟 사용자를 추가하세요. 예: "30대 자영업자를 위한", "앱 개발 경험이 없는 기획자가 사용할"')
+    else if (!a.hasTargetContext)
+      actions.push('사용 상황을 추가하세요. 예: "출퇴근 중 모바일로 빠르게 확인하는 상황", "주 1회 팀 회의에서 발표 자료로 활용"')
+
+    if (a.outputFormats.length === 0)
+      actions.push('출력 형식을 지정하세요. 예: "3단계 bullet로", "표 형식으로", "핵심만 2문장으로"')
+    else if (!a.hasUserAction)
+      actions.push('인터랙션 흐름을 추가하세요. 예: "사용자가 날짜를 선택하면 → 해당 기간 데이터를 차트로 표시한다"')
+
+    if (a.vagueWords.length >= 2 && !actions.some(a => a.includes('출력 형식')))
+      actions.push(`"${a.vagueWords[0]}" 대신 측정 가능한 기준을 사용하세요. 예: "적당히" → "3개 이내로"`)
+  } else {
+    actions.push('예외 처리 조건을 추가해보세요. 예: "데이터가 없을 경우에는 빈 상태 메시지를 표시한다"')
+    actions.push('성공 기준을 명시해보세요. 예: "초등학생이 읽어도 이해할 수 있는 수준", "5분 안에 읽을 수 있는 분량"')
+  }
+
+  if (actions.length > 0) {
+    parts.push('다음 중 하나만 추가해도 점수가 달라집니다:\n' + actions.slice(0, 2).map(a => `· ${a}`).join('\n'))
+  }
+
+  return parts.join('\n\n')
+}
 
   // ② 취약 항목 기반 구체적 지적
   const weakPoints: string[] = []
@@ -297,7 +460,7 @@ function buildFeedback(
   if (d.interpStability <= 4)
     weakPoints.push(a.vagueWords.length >= 2
       ? `"${a.vagueWords.slice(0, 2).join('", "')}" 같은 표현은 해석 기준이 불명확해 AI 출력이 일관되지 않을 수 있습니다.`
-      : '표현의 모호성으로 인해 결과 해석 ���향이 여러 갈래로 열려 있습니다.')
+      : '표현의 모호성으로 인해 결과 해석 �����향이 여러 갈래로 열려 있습니다.')
   if (d.executability <= 5)
     weakPoints.push('단계적 지시나 출력 요구 사항이 부족해 AI가 어디서 멈춰야 할지, 어떤 형식으로 답해야 할지 판단하기 어렵습니다.')
   if (a.toneConflict || a.scopeConflict)
@@ -394,7 +557,7 @@ function buildStrengthsWeaknesses(d: PromptDetails, a: ReturnType<typeof analyze
 
   // ⑧ 추상어 과다
   if (a.vagueWords.length >= 4)
-    weaknesses.push(`"${a.vagueWords.slice(0, 3).join('", "')}" 등 추상적 표현이 많습니다. 이런 단어는 AI마다 다르게 해석되므로 구체적 기준으로 교체해보세요.`)
+    weaknesses.push(`"${a.vagueWords.slice(0, 3).join('", "')}" 등 추상적 표현이 많습니다. 이런 단어는 AI마다 다르게 해석되므로 구체적 기준���로 교체해보세요.`)
 
   // 개선점이 없는 경우 (고득점)
   if (weaknesses.length === 0)
