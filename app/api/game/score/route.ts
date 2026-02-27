@@ -10,7 +10,7 @@ function getSupabase() {
 
 export async function POST(request: Request) {
   try {
-    const { session_id, phone_number, round_number, score } = await request.json()
+    const { session_id, phone_number, round_number, score, prompt_text } = await request.json()
 
     if (!session_id || !phone_number || !round_number || score === undefined) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const supabase = getSupabase()
     const { data, error } = await supabase
       .from('game_scores')
-      .insert({ session_id, phone_number, round_number, score })
+      .insert({ session_id, phone_number, round_number, score, prompt_text: prompt_text || null })
       .select()
 
     if (error) {

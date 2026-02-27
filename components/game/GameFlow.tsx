@@ -45,12 +45,9 @@ export function GameFlow() {
     const currentSessionId = sessionIdRef.current
     const currentPhone = phoneRef.current
 
-    if (!currentSessionId) {
-      console.error('[v0] No session_id available, skipping save')
-      return
-    }
+    if (!currentSessionId) return
     try {
-      const res = await fetch('/api/game/score', {
+      await fetch('/api/game/score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -58,15 +55,11 @@ export function GameFlow() {
           phone_number: currentPhone,
           round_number: 1,
           score: data.totalScore,
+          prompt_text: data.prompt,
         }),
       })
-      const json = await res.json()
-
-      if (!res.ok) {
-        console.error('[v0] Failed to save score:', json.error)
-      }
-    } catch (e) {
-      console.error('[v0] Failed to save to Supabase:', e)
+    } catch {
+      // silently fail
     }
   }
 
@@ -137,6 +130,7 @@ export function GameFlow() {
           <FinalResults
             roundData={roundData!}
             sessionId={sessionIdRef.current}
+            phoneNumber={phoneRef.current}
             onRestart={handleRestart}
           />
         )

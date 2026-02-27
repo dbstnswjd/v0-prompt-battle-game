@@ -1,11 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Phone, ArrowRight, AlertCircle } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { Phone, ArrowRight, AlertCircle, Trophy, Search } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 interface PhoneInputProps {
   onSubmit: (phone: string) => void
+}
+
+interface MyRankData {
+  rank: number
+  score: number
+  grade: string
+  total_players: number
 }
 
 function formatPhoneNumber(value: string): string {
@@ -22,11 +29,16 @@ function getRawDigits(formatted: string): string {
 export function PhoneInput({ onSubmit }: PhoneInputProps) {
   const [phone, setPhone] = useState('')
   const [error, setError] = useState('')
+  const [rankLoading, setRankLoading] = useState(false)
+  const [rankData, setRankData] = useState<MyRankData | null>(null)
+  const [rankMessage, setRankMessage] = useState('')
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhoneNumber(e.target.value)
     setPhone(formatted)
     setError('')
+    setRankData(null)
+    setRankMessage('')
   }
 
   const handleSubmit = () => {
@@ -37,6 +49,35 @@ export function PhoneInput({ onSubmit }: PhoneInputProps) {
     }
 
     onSubmit(digits)
+  }
+
+  const handleCheckRank = async () => {
+    const digits = getRawDigits(phone)
+    if (digits.length !== 11 || !digits.startsWith('010')) {
+      setError('먼저 전화번호를 입력해주세요')
+      return
+    }
+    setRankLoading(true)
+    setRankData(null)
+    setRankMessage('')
+    try {
+      const res = await fetch(`/api/game/my-rank?phone=${digits}`)
+      const json = await res.json()
+      if (res.ok && json.found) {
+        setRankData({
+          rank: json.rank,
+          score: json.score,
+          grade: json.grade,
+          total_players: json.total_players,
+        })
+      } else {
+        setRankMessage(json.message || '랭킹 조회에 실패했습니다.')
+      }
+    } catch {
+      setRankMessage('네트워크 에러가 발생했습니다.')
+    } finally {
+      setRankLoading(false)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -109,7 +150,71 @@ export function PhoneInput({ onSubmit }: PhoneInputProps) {
             <span>시작하기</span>
             <ArrowRight className="w-5 h-5" />
           </button>
+
+          <button
+            onClick={handleCheckRank}
+            disabled={!isValid || rankLoading}
+            className="w-full mt-3 py-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-200 font-medium rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {rankLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+                <span>조회 중...</span>
+              </>
+            ) : (
+              <>
+                <Search className="w-4 h-4" />
+                <span>현재 나의 랭킹 조회하기</span>
+              </>
+            )}
+          </button>
         </div>
+
+        {/* Rank Result */}
+        <AnimatePresence>
+          {rankData && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mt-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 text-center"
+            >
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <Trophy className="w-5 h-5 text-amber-400" />
+                <span className="font-semibold text-white">나의 랭킹</span>
+              </div>
+              <div className="flex items-center justify-center gap-6">
+                <div>
+                  <p className="text-xs text-amber-200/50 mb-1">순위</p>
+                  <p className="text-3xl font-bold text-amber-400">
+                    {rankData.rank}<span className="text-base text-amber-200/60">위</span>
+                  </p>
+                  <p className="text-xs text-amber-200/40">/ {rankData.total_players}명</p>
+                </div>
+                <div className="w-px h-12 bg-amber-500/20" />
+                <div>
+                  <p className="text-xs text-amber-200/50 mb-1">최고 점수</p>
+                  <p className="text-3xl font-bold text-white">{rankData.score}</p>
+                </div>
+                <div className="w-px h-12 bg-amber-500/20" />
+                <div>
+                  <p className="text-xs text-amber-200/50 mb-1">등급</p>
+                  <p className="text-3xl font-bold text-fuchsia-400">{rankData.grade}</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+          {rankMessage && !rankData && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mt-4 text-center text-sm text-amber-200/60 bg-white/[0.04] border border-white/10 rounded-xl py-4 px-5"
+            >
+              {rankMessage}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <p className="text-center text-violet-300/40 text-xs mt-6">
           전화번호는 상품 증정을 위한 용도로만 사용됩니다

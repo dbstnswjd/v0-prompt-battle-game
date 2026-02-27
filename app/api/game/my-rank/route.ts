@@ -13,12 +13,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const phone = searchParams.get('phone')
 
+    if (!phone) {
+      return NextResponse.json({ error: 'phone required' }, { status: 400 })
+    }
+
     const supabase = getSupabase()
 
-    // Fetch all scores, ordered by score descending
+    // Get all scores ordered by score desc
     const { data: allScores, error } = await supabase
       .from('game_scores')
-      .select('phone_number, score, prompt_text')
+      .select('phone_number, score')
       .order('score', { ascending: false })
 
     if (error) {
@@ -26,50 +30,39 @@ export async function GET(request: Request) {
     }
 
     if (!allScores || allScores.length === 0) {
-      return NextResponse.json({
-        rankings: [],
-        my_rank: null,
-        total_players: 0,
-      })
+      return NextResponse.json({ found: false, message: '아직 참가 기록이 없습니다.' })
     }
 
-    // Deduplicate by phone_number (keep highest score per player)
-    const bestByPhone = new Map<string, { phone_number: string; score: number; prompt_text: string | null }>()
+    // Deduplicate: best score per phone
+    const bestByPhone = new Map<string, number>()
     for (const row of allScores) {
       const key = row.phone_number || 'unknown'
       const existing = bestByPhone.get(key)
-      if (!existing || row.score > existing.score) {
-        bestByPhone.set(key, {
-          phone_number: row.phone_number,
-          score: row.score,
-          prompt_text: row.prompt_text || null,
-        })
+      if (!existing || row.score > existing) {
+        bestByPhone.set(key, row.score)
       }
     }
 
-    // Sort and assign ranks
-    const sorted = Array.from(bestByPhone.values()).sort((a, b) => b.score - a.score)
+    // Sort
+    const sorted = Array.from(bestByPhone.entries()).sort((a, b) => b[1] - a[1])
+    const totalPlayers = sorted.length
 
-    let myRank: number | null = null
-    const rankings = sorted.map((entry, idx) => {
-      const rank = idx + 1
-      const isMe = phone ? entry.phone_number === phone : false
-      if (isMe) myRank = rank
+    // Find my rank
+    const myEntry = sorted.findIndex(([p]) => p === phone)
+    if (myEntry === -1) {
+      return NextResponse.json({ found: false, message: '해당 전화번호로 참가한 기록이 없습니다.' })
+    }
 
-      return {
-        rank,
-        score: entry.score,
-        grade: getGrade(entry.score),
-        isMe,
-        // Only include prompt_text for top 3
-        prompt_text: rank <= 3 ? entry.prompt_text : undefined,
-      }
-    })
+    const myRank = myEntry + 1
+    const myScore = sorted[myEntry][1]
+    const grade = getGrade(myScore)
 
     return NextResponse.json({
-      rankings,
-      my_rank: myRank,
-      total_players: rankings.length,
+      found: true,
+      rank: myRank,
+      score: myScore,
+      grade,
+      total_players: totalPlayers,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
