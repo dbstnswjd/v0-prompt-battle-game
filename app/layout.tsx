@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import Script from 'next/script'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -38,10 +37,6 @@ export default function RootLayout({
   return (
     <html lang="ko" className="dark">
       <body className="font-sans antialiased">
-        <Script
-          src="https://developers.kakao.com/sdk/js/kakao.js"
-          strategy="beforeInteractive"
-        />
         {children}
         <Analytics />
       </body>
