@@ -5,15 +5,25 @@ import { Send, AlertCircle, FileText, ChevronDown, ChevronUp } from 'lucide-reac
 import { motion, AnimatePresence } from 'framer-motion'
 
 const EXAMPLE_PROMPT = `앱 이름: Daily Wellness
-목적: 사용자의 정신적/신체적 건강 추적 및 향상
+목적: 사용자의 정신적/신체적 건강을 매일 추적하고 향상시키는 웰니스 앱
 
 주요 기능:
-1. 일일 기분 추적기 - 기분 선택 및 메모 입력, 그래프 시각화
-2. 운동 기록 - 맞춤 목표 설정, 운동 종류 선택, 통계 제공
-3. 명상/이완 기법 - 유형별 명상 제공, 맞춤형 추천
-4. 건강 팁 - 매일 건강 팁 제공, 개인화 추천
-5. 커뮤니티 - 경험 공유 포럼, 주제별 토론
-6. 알림 - 목표/기록 리마인더 제공`
+1. 일일 기분 추적기
+   - 행복/보통/슬픔/불안 등 기분 선택 옵션 제공
+   - 짧은 메모 입력 기능 포함
+   - 주간/월간 기분 변화를 그래프로 시각화
+
+2. 운동 기록
+   - 사용자 맞춤형 운동 목표 설정 (예: 주 3회 러닝)
+   - 운동 종류별 기록 (러닝, 요가, 헬스 등)
+   - 운동 시간, 소모 칼로리 등 통계 대시보드
+
+3. 명상 및 이완 기법
+   - 호흡법, 바디스캔, 집중 명상 등 유형별 제공
+   - 사용자 선호도 기반 맞춤 추천
+
+4. 커뮤니티 - 경험 공유 포럼 및 주제별 토론 게시판
+5. 알림 - 기분 기록, 운동 목표, 명상 리마인더 제공`
 
 interface PromptWritingProps {
   roundNumber: number
@@ -43,10 +53,6 @@ export function PromptWriting({ roundNumber, onSubmit }: PromptWritingProps) {
       >
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-500/20 rounded-full mb-6 border border-violet-500/30">
-            <span className="text-violet-300 font-medium">Round {roundNumber}</span>
-          </div>
-
           <h2 className="text-2xl font-bold text-white mb-2">
             자유 주제 앱 개발 프롬프트
           </h2>

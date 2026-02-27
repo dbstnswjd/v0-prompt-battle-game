@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Trophy, Share2, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, BarChart3, Lightbulb, Wrench } from 'lucide-react'
+import { Trophy, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, BarChart3, Lightbulb, Wrench } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
@@ -38,19 +38,19 @@ function ScoreBar({ label, score }: { label: string; score: number }) {
   )
 }
 
-const SHARE_LABEL = '\uacb0\uacfc \uacf5\uc720\ud558\uae30'
-
-function ShareButton({ onClick }: { onClick: () => void }) {
+function KakaoIcon({ className }: { className?: string }) {
   return (
-    <motion.button
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
-      onClick={onClick}
-      className="w-full py-4 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-    >
-      <Share2 className="w-5 h-5" />
-      <span>{SHARE_LABEL}</span>
-    </motion.button>
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 3C6.477 3 2 6.463 2 10.691c0 2.726 1.8 5.117 4.51 6.473-.145.53-.935 3.42-.967 3.636 0 0-.02.166.088.23.108.063.234.03.234.03.31-.044 3.588-2.34 4.155-2.738.636.094 1.29.144 1.98.144 5.523 0 10-3.463 10-7.691S17.523 3 12 3z" />
+    </svg>
+  )
+}
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
+    </svg>
   )
 }
 
@@ -123,27 +123,45 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
     launchConfetti()
   }, [])
 
-  const handleShare = useCallback(async () => {
-    const text = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!\n아이디어: ${bestRound.ideaScore}점 | 프롬프트: ${bestRound.promptScore}점\n주제: ${bestRound.topic}\n\n프롬프트는 감각이 아니라 설계다. 단 2번의 기회, AI가 판단한다.`
+  const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!\n아이디어: ${bestRound.ideaScore}점 | 프롬프트: ${bestRound.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. 단 2번의 기회, AI가 판단한다.`
+  const shareUrl = typeof window !== 'undefined' ? window.location.href : ''
 
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: '프롬프트 배틀 결과', text })
-        return
-      } catch {
-        // User cancelled or error
-      }
+  const handleKakaoShare = useCallback(() => {
+    // Kakao SDK share via URL scheme
+    const kakaoUrl = `https://sharer.kakao.com/talk/friends/picker/link?app_key=javascript&url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`
+    // Fallback: use Kakao Talk URL scheme for mobile or web share link
+    const mobileKakaoUrl = `kakaotalk://msg/text/${encodeURIComponent(shareText)}`
+
+    // Try mobile scheme first, fallback to web
+    if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+      window.location.href = mobileKakaoUrl
+      setTimeout(() => {
+        // If app didn't open, open web fallback
+        window.open(`https://story.kakao.com/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank')
+      }, 1500)
+    } else {
+      window.open(`https://story.kakao.com/share?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank')
     }
+  }, [shareText, shareUrl])
 
+  const handleInstagramShare = useCallback(async () => {
+    // Instagram doesn't support direct text sharing via URL
+    // Copy text to clipboard and open Instagram
     try {
-      await navigator.clipboard.writeText(text)
-      setShareMessage('결과가 클립보드에 복사되었습니다!')
-      setTimeout(() => setShareMessage(''), 2000)
+      await navigator.clipboard.writeText(shareText)
+      setShareMessage('텍스트가 복사되었습니다! 인스타그램 스토리에 붙여넣기 하세요.')
+      setTimeout(() => setShareMessage(''), 3000)
+      // Open Instagram app or web
+      if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        window.location.href = 'instagram://app'
+      } else {
+        window.open('https://www.instagram.com/', '_blank')
+      }
     } catch {
       setShareMessage('복사에 실패했습니다.')
       setTimeout(() => setShareMessage(''), 2000)
     }
-  }, [finalScore, grade, bestRound.topic, bestRound.ideaScore, bestRound.promptScore])
+  }, [shareText])
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
@@ -365,7 +383,26 @@ export function FinalResults({ round1, round2, onRestart }: FinalResultsProps) {
 
             {/* Action Buttons */}
             <div className="space-y-3 pt-2">
-              <ShareButton onClick={handleShare} />
+              <div className="grid grid-cols-2 gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleKakaoShare}
+                  className="py-4 bg-[#FEE500] hover:bg-[#FDD800] text-[#3C1E1E] font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <KakaoIcon className="w-5 h-5" />
+                  <span>카카오톡 공유</span>
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleInstagramShare}
+                  className="py-4 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] hover:opacity-90 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
+                  <InstagramIcon className="w-5 h-5" />
+                  <span>인스타 공유</span>
+                </motion.button>
+              </div>
 
               {shareMessage && (
                 <motion.p
