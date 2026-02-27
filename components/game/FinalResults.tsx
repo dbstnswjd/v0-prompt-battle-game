@@ -140,8 +140,10 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
       const params = new URLSearchParams()
       if (phoneNumber) params.set('phone', phoneNumber)
       const url = `/api/game/ranking?${params.toString()}`
+      console.log('[v0] fetchRanking called, url:', url, 'phone:', phoneNumber)
       const res = await fetch(url)
       const json = await res.json()
+      console.log('[v0] ranking response:', res.status, JSON.stringify(json).slice(0, 300))
       if (res.ok) {
         setRankings(json.rankings || [])
         setMyRank(json.my_rank ?? null)
