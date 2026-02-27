@@ -174,43 +174,29 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
     setShowRanking(!showRanking)
   }
 
-  // Download share image — html2canvas로 실제 화면 캡처
+  // Download share image — dom-to-image-more로 실제 화면 캡처
   const handleDownloadImage = useCallback(async () => {
     if (downloading || !captureRef.current) return
     setDownloading(true)
     try {
-      console.log('[v0] html2canvas start, ref:', !!captureRef.current)
-      const html2canvas = (await import('html2canvas')).default
-      console.log('[v0] html2canvas loaded')
-      const canvas = await html2canvas(captureRef.current, {
-        backgroundColor: '#1e1033',
+      const domtoimage = (await import('dom-to-image-more')).default
+      const blob = await domtoimage.toBlob(captureRef.current, {
+        quality: 1,
         scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        removeContainer: true,
+        bgcolor: '#1e1033',
+        style: { borderRadius: '0' },
       })
-      console.log('[v0] canvas rendered, size:', canvas.width, canvas.height)
-      canvas.toBlob((blob) => {
-        console.log('[v0] blob:', blob?.size)
-        if (!blob) {
-          setShareMessage('이미지 생성에 실패했습니다.')
-          setTimeout(() => setShareMessage(''), 2000)
-          return
-        }
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `prompt-battle-${finalScore}점-${grade}.png`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-        setShareMessage('이미지가 저장되었습니다!')
-        setTimeout(() => setShareMessage(''), 2000)
-      }, 'image/png')
-    } catch (e) {
-      console.log('[v0] html2canvas error:', e)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `prompt-battle-${finalScore}점-${grade}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setShareMessage('이미지가 저장되었습니다!')
+      setTimeout(() => setShareMessage(''), 2000)
+    } catch {
       setShareMessage('이미지 생성에 실패했습니다.')
       setTimeout(() => setShareMessage(''), 2000)
     } finally {
