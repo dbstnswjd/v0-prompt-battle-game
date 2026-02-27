@@ -196,7 +196,8 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
 
   const rankText = myRank ? `\n현재 순위: ${myRank}위 / ${totalPlayers}명` : ''
   const shareText = `프롬프트 배틀에서 ${finalScore}점 (${grade}등급)을 받았습니다!${rankText}\n아이디어: ${roundData.ideaScore}점 | 프롬프트: ${roundData.promptScore}점\n\n프롬프트는 감각이 아니라 설계다. AI가 판단한다.`
-  const shareUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const shareUrl = sessionId ? `${baseUrl}/share/${sessionId}` : baseUrl
 
   const kakaoInitialized = useRef(false)
 
@@ -251,7 +252,7 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
       content: {
         title: '프롬프트 배틀 결과',
         description,
-        imageUrl: `${shareUrl}/og-image.png`,
+        imageUrl: `${baseUrl}/og-image.png`,
         link: {
           mobileWebUrl: shareUrl,
           webUrl: shareUrl,
