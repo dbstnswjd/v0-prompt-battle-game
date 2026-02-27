@@ -601,16 +601,19 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
 
                           <div className="space-y-2">
                             {rankings.map((entry, idx) => {
-                              const hasPrompt = entry.rank <= 3 && entry.prompt_text
+                              const isTop3 = entry.rank <= 3
                               return (
                                 <div
                                   key={idx}
                                   onClick={() => {
-                                    if (hasPrompt) {
-                                      setSelectedPrompt({ rank: entry.rank, text: entry.prompt_text! })
+                                    if (isTop3) {
+                                      setSelectedPrompt({
+                                        rank: entry.rank,
+                                        text: entry.prompt_text || '아직 프롬프트가 저장되지 않은 기록입니다.',
+                                      })
                                     }
                                   }}
-                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${getRankBg(entry.rank, entry.isMe)} ${hasPrompt ? 'cursor-pointer hover:bg-white/[0.08]' : ''}`}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${getRankBg(entry.rank, entry.isMe)} ${isTop3 ? 'cursor-pointer hover:bg-white/[0.08]' : ''}`}
                                 >
                                   <div className="w-8 text-center shrink-0">
                                     {getRankIcon(entry.rank) || (
@@ -629,7 +632,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                                           ME
                                         </span>
                                       )}
-                                      {hasPrompt && (
+                                      {isTop3 && (
                                         <span className="px-1.5 py-0.5 bg-sky-500/20 border border-sky-500/30 rounded text-[10px] text-sky-300 font-medium">
                                           프롬프트 보기
                                         </span>
