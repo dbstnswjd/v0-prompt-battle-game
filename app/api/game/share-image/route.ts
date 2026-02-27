@@ -1,6 +1,5 @@
+import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
 import { randomUUID } from 'crypto'
 
 export async function POST(request: Request) {
@@ -15,21 +14,14 @@ export async function POST(request: Request) {
     const base64Data = imageData.replace(/^data:image\/png;base64,/, '')
     const buffer = Buffer.from(base64Data, 'base64')
 
-    // Save to public/share-images/ directory
-    const dir = join(process.cwd(), 'public', 'share-images')
-    await mkdir(dir, { recursive: true })
+    // Upload to Vercel Blob
+    const filename = `share-images/${randomUUID()}.png`
+    const blob = await put(filename, buffer, {
+      access: 'public',
+      contentType: 'image/png',
+    })
 
-    const filename = `${randomUUID()}.png`
-    const filepath = join(dir, filename)
-    await writeFile(filepath, buffer)
-
-    // Return the public URL
-    const origin = request.headers.get('origin') || request.headers.get('host') || ''
-    const protocol = origin.startsWith('http') ? '' : 'https://'
-    const baseUrl = origin.startsWith('http') ? origin : `${protocol}${origin}`
-    const imageUrl = `${baseUrl}/share-images/${filename}`
-
-    return NextResponse.json({ imageUrl })
+    return NextResponse.json({ imageUrl: blob.url })
   } catch (error) {
     console.error('[v0] share-image error:', error)
     return NextResponse.json({ error: 'Failed to process image' }, { status: 500 })
