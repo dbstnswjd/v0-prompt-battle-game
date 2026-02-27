@@ -199,35 +199,67 @@ export function FinalResults({ roundData, sessionId, onRestart }: FinalResultsPr
 
   // Initialize Kakao SDK
   useEffect(() => {
+    const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+    console.log('[v0] Kakao init - key:', kakaoKey ? kakaoKey.slice(0, 6) + '...' : 'MISSING')
+    console.log('[v0] Kakao init - window.Kakao:', typeof window.Kakao)
+
     const initKakao = () => {
-      const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
-      if (!kakaoKey) return
-      if (window.Kakao && !window.Kakao.isInitialized()) {
-        window.Kakao.init(kakaoKey)
-        kakaoInitialized.current = true
-      } else if (window.Kakao?.isInitialized()) {
-        kakaoInitialized.current = true
+      console.log('[v0] initKakao called - Kakao exists:', !!window.Kakao, 'isInitialized:', window.Kakao?.isInitialized?.())
+      if (!kakaoKey) {
+        console.log('[v0] KAKAO KEY IS MISSING - check NEXT_PUBLIC_KAKAO_JS_KEY env var')
+        return
+      }
+      try {
+        if (window.Kakao && !window.Kakao.isInitialized()) {
+          window.Kakao.init(kakaoKey)
+          kakaoInitialized.current = true
+          console.log('[v0] Kakao SDK initialized OK. Share available:', !!window.Kakao.Share)
+        } else if (window.Kakao?.isInitialized()) {
+          kakaoInitialized.current = true
+          console.log('[v0] Kakao SDK was already initialized')
+        }
+      } catch (e) {
+        console.error('[v0] Kakao init ERROR:', e)
       }
     }
 
     if (window.Kakao) {
       initKakao()
     } else {
+      console.log('[v0] Kakao not yet on window, starting poll...')
       const check = setInterval(() => {
         if (window.Kakao) {
+          console.log('[v0] Kakao appeared on window after polling')
           initKakao()
           clearInterval(check)
         }
-      }, 200)
-      setTimeout(() => clearInterval(check), 5000)
+      }, 300)
+      setTimeout(() => {
+        clearInterval(check)
+        console.log('[v0] Kakao poll timeout - Kakao loaded:', !!window.Kakao)
+      }, 10000)
     }
   }, [])
 
   const handleKakaoShare = useCallback(() => {
+    console.log('[v0] Share clicked - Kakao:', !!window.Kakao, 'initialized:', window.Kakao?.isInitialized?.(), 'ref:', kakaoInitialized.current)
     if (!window.Kakao || !window.Kakao.isInitialized()) {
-      setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
-      setTimeout(() => setShareMessage(''), 2000)
-      return
+      // Last-ditch attempt to init
+      const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
+      if (window.Kakao && kakaoKey && !window.Kakao.isInitialized()) {
+        try {
+          window.Kakao.init(kakaoKey)
+          kakaoInitialized.current = true
+          console.log('[v0] Late init succeeded')
+        } catch (e) {
+          console.error('[v0] Late init failed:', e)
+        }
+      }
+      if (!window.Kakao?.isInitialized()) {
+        setShareMessage('카카오 SDK를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
+        setTimeout(() => setShareMessage(''), 2000)
+        return
+      }
     }
 
     const description = myRank
