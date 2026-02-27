@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Trophy, RotateCcw, CheckCircle, XCircle, MessageSquare, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp, Download } from 'lucide-react'
+import { Trophy, RotateCcw, CheckCircle, XCircle, Sparkles, FileText, Lightbulb, Wrench, Crown, Medal, ChevronDown, ChevronUp, Download } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { RoundData } from '@/lib/game-types'
 import { getGrade, getGradeColor } from '@/lib/game-types'
@@ -467,20 +467,23 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 <span className="font-semibold text-white">프롬프트 구조 평가</span>
                 <span className="ml-auto text-lg font-bold text-white">{roundData.promptScore}점</span>
               </div>
-              <ScoreBar label="역할 명확성" score={roundData.promptDetails.roleClarity} />
-              <ScoreBar label="구조 품질" score={roundData.promptDetails.structureQuality} />
-              <ScoreBar label="출력 명세" score={roundData.promptDetails.outputSpecification} />
+              <ScoreBar label="문장 구조 완성도" score={Math.min(100, 50 + roundData.promptDetails.structureScore * 3)} />
+              <ScoreBar label="길이 적절성" score={Math.min(100, 50 + roundData.promptDetails.lengthScore * 5)} />
+              <ScoreBar label="구체성" score={Math.min(100, 50 + roundData.promptDetails.specificityScore * 2.5)} />
+              <ScoreBar label="논리 연결성" score={Math.min(100, 50 + roundData.promptDetails.logicScore * 3)} />
             </div>
 
-            {/* AI Feedback */}
+            {/* Improved Prompt */}
             <div className="bg-sky-500/[0.06] border border-sky-500/20 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-3">
-                <MessageSquare className="w-5 h-5 text-sky-400" />
-                <span className="font-semibold text-white">AI 총평</span>
+                <Sparkles className="w-5 h-5 text-sky-400" />
+                <span className="font-semibold text-white">개선된 프롬프트</span>
               </div>
-              <p className="text-violet-100/80 leading-relaxed text-sm">
-                {roundData.feedback}
-              </p>
+              <div className="bg-white/[0.05] border border-sky-500/10 rounded-xl p-4">
+                <p className="text-sky-100/90 leading-relaxed text-sm whitespace-pre-wrap break-words">
+                  {roundData.improvedPrompt}
+                </p>
+              </div>
             </div>
 
             {/* Strengths & Weaknesses */}

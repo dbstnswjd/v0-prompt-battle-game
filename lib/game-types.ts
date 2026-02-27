@@ -12,11 +12,13 @@ export interface RoundData {
     trendAlignment: number
   }
   promptDetails: {
-    roleClarity: number
-    structureQuality: number
-    outputSpecification: number
+    structureScore: number
+    lengthScore: number
+    specificityScore: number
+    logicScore: number
+    repetitionPenalty: number
   }
-  feedback: string
+  improvedPrompt: string
   strengths: string[]
   weaknesses: string[]
 }

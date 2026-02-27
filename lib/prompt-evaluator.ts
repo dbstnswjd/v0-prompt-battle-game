@@ -1,7 +1,7 @@
 interface EvaluationResult {
   ideaScore: number
   promptScore: number
-  feedback: string
+  improvedPrompt: string
   ideaDetails: {
     creativity: number
     feasibility: number
@@ -10,162 +10,171 @@ interface EvaluationResult {
     trendAlignment: number
   }
   promptDetails: {
-    roleClarity: number
-    structureQuality: number
-    outputSpecification: number
+    structureScore: number
+    lengthScore: number
+    specificityScore: number
+    logicScore: number
+    repetitionPenalty: number
   }
   strengths: string[]
   weaknesses: string[]
 }
 
-export function evaluatePrompt(prompt: string, topic: string): EvaluationResult {
-  const ideaEval = evaluateIdea(prompt, topic)
-  const promptEval = evaluatePromptQuality(prompt)
+// ─── Hard filter: 0점 처리 ───────────────────────────────────────
+function isInvalidPrompt(text: string): boolean {
+  const trimmed = text.trim()
+  if (trimmed.length < 5) return true
+  if (/^[^가-힣a-zA-Z0-9]+$/.test(trimmed)) return true
+  if (/(.)\1{4,}/.test(trimmed)) return true
+  if (/^(asdf|qwer|zxcv|1234|ㅁㄴㅇㄹ|ㅂㅈㄷㄱ)/i.test(trimmed)) return true
+  return false
+}
 
-  const finalIdeaScore = applyStrictGrading(ideaEval.total, prompt)
-  const finalPromptScore = applyStrictGrading(promptEval.total, prompt)
+// ─── 자연어 분석 유틸 ─────────────────────────────────────────────
+function analyze(text: string) {
+  const words = text.split(/\s+/).filter(Boolean)
+  const hasNumber = /\d+/.test(text)
+  const hasPurpose = /위해|목적|원한다|하려고|하기 위|을 위한|를 위한/.test(text)
+  const hasCondition = /만약|조건|경우|상황|때는|이라면|다면/.test(text)
+  const isQuestion = /[?？]$/.test(text.trim()) || /알려줘|설명해|말해줘|알고 싶|궁금/.test(text)
+  const connectors = ['왜', '때문에', '하지만', '따라서', '그리고', '또한', '게다가', '반면']
+  const connectorCount = connectors.filter(c => text.includes(c)).length
+  const sentences = text.split(/[.。!！?？\n]+/).filter(s => s.trim().length > 0)
 
-  const feedback = generateFeedback(finalIdeaScore, finalPromptScore, prompt)
-  const analysis = analyzeStrengthsWeaknesses(ideaEval, promptEval, prompt)
+  // 단어 중복률
+  const wordFreq: Record<string, number> = {}
+  words.forEach(w => { wordFreq[w] = (wordFreq[w] || 0) + 1 })
+  const duplicates = Object.values(wordFreq).filter(c => c > 1).reduce((a, b) => a + b, 0)
+  const dupRate = words.length > 0 ? duplicates / words.length : 0
+
+  // 구체 명사 (두 글자 이상 명사형)
+  const concreteNouns = text.match(/[가-힣]{2,}(?:이|가|을|를|의|에|에서|로|으로|와|과|도)/g) || []
 
   return {
-    ideaScore: Math.min(100, Math.max(0, finalIdeaScore)),
-    promptScore: Math.min(100, Math.max(0, finalPromptScore)),
-    feedback,
-    ideaDetails: ideaEval.details,
-    promptDetails: promptEval.details,
-    strengths: analysis.strengths,
-    weaknesses: analysis.weaknesses,
+    words,
+    wordCount: words.length,
+    charCount: text.length,
+    hasNumber,
+    hasPurpose,
+    hasCondition,
+    isQuestion,
+    connectorCount,
+    sentenceCount: sentences.length,
+    dupRate,
+    concreteNounCount: concreteNouns.length,
   }
 }
 
-function applyStrictGrading(score: number, prompt: string): number {
-  if (score < 90) return Math.round(score)
-
-  let finalScore = score
-  let penalties = 0
-
-  const checks = {
-    hasSteps: /\d+\.\s/.test(prompt) || /\n-\s/.test(prompt),
-    hasExamples: prompt.includes('\uC608\uC2DC') || prompt.includes('\uC608\uB97C \uB4E4\uC5B4') || prompt.includes('\uC0AC\uB840'),
-    hasConstraints: prompt.includes('\uC870\uAC74') || prompt.includes('\uC81C\uC57D'),
-    hasFormat: prompt.includes('\uD615\uC2DD') || prompt.includes('\uD3EC\uB9F7') || prompt.includes('\uC591\uC2DD'),
-    hasRole: prompt.includes('\uC5ED\uD560') || prompt.includes('\uB2F9\uC2E0\uC740') || prompt.includes('\uC804\uBB38\uAC00'),
-    hasContext: prompt.includes('\uB9E5\uB77D') || prompt.includes('\uBC30\uACBD') || prompt.includes('\uC0C1\uD669'),
-    hasMetrics: /\d+/.test(prompt) && (prompt.includes('\uAC1C') || prompt.includes('\uAC00\uC9C0') || prompt.includes('\uB2E8\uACC4')),
-    hasMultiAspect: prompt.split('\n').length >= 3 || prompt.includes('\uB610\uD55C') || prompt.includes('\uBFD0\uB9CC \uC544\uB2C8\uB77C'),
+// ─── 프롬프트 점수 (새 기준) ──────────────────────────────────────
+function scorePromptQuality(text: string) {
+  if (isInvalidPrompt(text)) {
+    return {
+      total: 0,
+      details: { structureScore: 0, lengthScore: 0, specificityScore: 0, logicScore: 0, repetitionPenalty: 0 }
+    }
   }
 
-  if (!checks.hasSteps) penalties += 2.8
-  if (!checks.hasExamples) penalties += 2.3
-  if (!checks.hasConstraints) penalties += 2.1
-  if (!checks.hasFormat) penalties += 2.5
-  if (!checks.hasRole) penalties += 2.4
-  if (!checks.hasContext) penalties += 1.7
-  if (!checks.hasMetrics) penalties += 1.5
-  if (!checks.hasMultiAspect) penalties += 1.9
+  const a = analyze(text)
+  let base = 50
 
-  if (score >= 95) {
-    const sophWords = ['\uBD84\uC11D', '\uD3C9\uAC00', '\uACE0\uB824', '\uBC18\uC601', '\uCD5C\uC801\uD654', '\uAC1C\uC120', '\uAC80\uC99D', '\uB3C4\uCD9C', '\uC885\uD569']
-    const sophCount = sophWords.filter(kw => prompt.includes(kw)).length
-    if (sophCount < 3) penalties += (3 - sophCount) * 1.4
+  // A. 문장 구조 완성도 (0~15)
+  let structureScore = 0
+  if (a.concreteNounCount >= 1) structureScore += 5
+  const hasVerb = /해|해줘|알려|설명|분석|작성|생성|만들|제시|요약|정리/.test(text)
+  if (hasVerb) structureScore += 5
+  if (a.sentenceCount >= 2) structureScore += 5
 
-    const structIndicators = [
-      prompt.includes('1.') || prompt.includes('\uCCAB\uC9F8'),
-      prompt.includes('2.') || prompt.includes('\uB458\uC9F8'),
-      prompt.includes('3.') || prompt.includes('\uC14B\uC9F8'),
-      prompt.includes('\uB2E8\uACC4') || prompt.includes('\uC808\uCC28'),
-      prompt.includes('\uC694\uAD6C\uC0AC\uD56D') || prompt.includes('\uD544\uC218'),
-    ]
-    const structCount = structIndicators.filter(Boolean).length
-    if (structCount < 3) penalties += (3 - structCount) * 1.6
+  // B. 길이 적절성 (0~10)
+  let lengthScore = 0
+  if (a.wordCount >= 10) lengthScore += 5
+  if (a.charCount >= 30 && a.charCount <= 300) lengthScore += 5
+  if (a.charCount > 300) lengthScore -= 5
 
-    const numMatches = prompt.match(/\d+/g)
-    if (!numMatches || numMatches.length < 3) penalties += 1.8
+  // C. 구체성 (0~20)
+  let specificityScore = 0
+  if (a.hasNumber) specificityScore += 5
+  const adjectives = text.match(/구체적|자세|상세|명확|정확|간결|효율|최적|핵심|전문/g) || []
+  if (adjectives.length >= 2) specificityScore += 5
+  if (a.hasPurpose) specificityScore += 5
+  if (a.hasCondition) specificityScore += 5
 
-    const outputWords = ['\uD3EC\uD568', '\uBA85\uC2DC', '\uC791\uC131', '\uC0DD\uC131', '\uC81C\uC2DC', '\uB3C4\uCD9C', '\uC124\uBA85', '\uAE30\uC220']
-    const outputCount = outputWords.filter(kw => prompt.includes(kw)).length
-    if (outputCount < 2) penalties += 2.0
-  }
+  // D. 논리 연결성 (0~15)
+  const logicScore = Math.min(15, a.connectorCount * 3)
 
-  if (score >= 98) {
-    const steps = prompt.match(/\d+\./g)
-    if (!steps || steps.length < 4) penalties += 2.8
-    const hasNeg = prompt.includes('\uC81C\uC678') || prompt.includes('\uD53C\uD574') || prompt.includes('\uC54A\uB3C4\uB85D') || prompt.includes('\uAE08\uC9C0')
-    if (!hasNeg) penalties += 2.3
-    const hasEdge = prompt.includes('\uC8FC\uC758') || prompt.includes('\uACE0\uB824\uC0AC\uD56D') || prompt.includes('\uB2E8,') || prompt.includes('\uB2E4\uB9CC')
-    if (!hasEdge) penalties += 2.5
-  }
+  // E. 반복도 감점 (-10~0)
+  let repetitionPenalty = 0
+  if (a.dupRate > 0.3) repetitionPenalty = -10
+  else if (a.dupRate > 0.2) repetitionPenalty = -5
 
-  finalScore = score - penalties
-  if (finalScore > 99.5) finalScore = 99.5
-  if (finalScore >= 90) return Math.round(finalScore * 10) / 10
-  return Math.round(finalScore)
-}
+  // F. 추상도/구체도 균형 (-5~+10)
+  let abstractBalance = 0
+  const abstractWords = text.match(/좋은|나쁜|좋게|잘|많이|빠르게|효율적|최대한|가능하면/g) || []
+  if (abstractWords.length >= 3 && a.concreteNounCount < 2) abstractBalance = -5
+  if (a.concreteNounCount >= 5) abstractBalance = 10
 
-interface IdeaEvalResult {
-  total: number
-  details: {
-    creativity: number
-    feasibility: number
-    specificity: number
-    marketability: number
-    trendAlignment: number
+  const total = Math.min(100, Math.max(0,
+    base + structureScore + lengthScore + specificityScore + logicScore + repetitionPenalty + abstractBalance
+  ))
+
+  return {
+    total: Math.round(total),
+    details: { structureScore, lengthScore, specificityScore, logicScore, repetitionPenalty }
   }
 }
 
-function evaluateIdea(prompt: string, topic: string): IdeaEvalResult {
+// ─── 아이디어 점수 (기존 유지하되 함수명만 분리) ───────────────────
+function scoreIdea(prompt: string, topic: string) {
+  if (isInvalidPrompt(prompt)) {
+    return {
+      total: 0,
+      details: { creativity: 0, feasibility: 0, specificity: 0, marketability: 0, trendAlignment: 0 }
+    }
+  }
+
   let creativity = 55
   let feasibility = 55
   let specificity = 55
   let marketability = 55
   let trendAlignment = 55
 
-  const creativityKw = ['\uC0C8\uB85C\uC6B4', '\uCC3D\uC758\uC801', '\uB3C5\uD2B9\uD55C', '\uD601\uC2E0\uC801', '\uCC28\uBCC4\uD654', '\uAC10\uC131', '\uACBD\uD5D8', '\uC2A4\uD1A0\uB9AC']
+  const creativityKw = ['새로운', '창의적', '독특한', '혁신적', '차별화', '감성', '경험', '스토리']
   creativity += creativityKw.filter(kw => prompt.includes(kw)).length * 8
-  if (prompt.includes('\uBB38\uC81C') || prompt.includes('\uD574\uACB0') || prompt.includes('\uD544\uC694')) creativity += 10
-  if (prompt.includes('\uC65C') || prompt.includes('\uC5B4\uB5BB\uAC8C')) creativity += 8
-  const innovKw = ['\uC7AC\uD574\uC11D', '\uC804\uD658', '\uC870\uD569', '\uD1B5\uD569', '\uC735\uD569', '\uAC1C\uC120']
+  if (prompt.includes('문제') || prompt.includes('해결') || prompt.includes('필요')) creativity += 10
+  if (prompt.includes('왜') || prompt.includes('어떻게')) creativity += 8
+  const innovKw = ['재해석', '전환', '조합', '통합', '융합', '개선']
   creativity += innovKw.filter(kw => prompt.includes(kw)).length * 7
 
-  const practKw = ['\uAC04\uB2E8', '\uC27D\uAC8C', '\uD3B8\uB9AC', '\uC2E4\uC6A9\uC801', '\uD604\uC2E4\uC801', '\uAC00\uB2A5']
+  const practKw = ['간단', '쉽게', '편리', '실용적', '현실적', '가능']
   feasibility += practKw.filter(kw => prompt.includes(kw)).length * 8
-  const techKw = ['\uAE30\uC220', '\uC54C\uACE0\uB9AC\uC998', '\uC2DC\uC2A4\uD15C', '\uC790\uB3D9\uD654', '\uB370\uC774\uD130']
+  const techKw = ['기술', '알고리즘', '시스템', '자동화', '데이터']
   feasibility += techKw.filter(kw => prompt.includes(kw)).length * 7
-  if (['\uBCF5\uC7A1\uD55C', '\uC5B4\uB824\uC6B4', '\uACE0\uAE09'].some(w => prompt.includes(w))) feasibility -= 8
-  if (prompt.includes('\uBC29\uBC95') || prompt.includes('\uC808\uCC28') || prompt.includes('\uB2E8\uACC4')) feasibility += 12
+  if (['복잡한', '어려운', '고급'].some(w => prompt.includes(w))) feasibility -= 8
+  if (prompt.includes('방법') || prompt.includes('절차') || prompt.includes('단계')) feasibility += 12
 
-  const specKw = ['\uAE30\uB2A5', '\uC11C\uBE44\uC2A4', '\uC571', '\uD50C\uB7AB\uD3FC', '\uC2DC\uC2A4\uD15C', '\uC54C\uB9BC', '\uCD94\uCC9C', '\uBD84\uC11D', '\uB370\uC774\uD130']
+  const specKw = ['기능', '서비스', '앱', '플랫폼', '시스템', '알림', '추천', '분석', '데이터']
   specificity += specKw.filter(kw => prompt.includes(kw)).length * 9
   const topicParts = topic.split('/').map(p => p.trim())
-  if (topicParts.some(part => prompt.includes(part.replace('\uC744(\uB97C) \uC704\uD55C', '').trim()))) specificity += 15
-  const detailKw = ['\uAD6C\uCCB4\uC801\uC73C\uB85C', '\uC0C1\uC138\uD788', '\uC815\uD655\uD788', '\uBA85\uD655\uD788']
+  if (topicParts.some(part => prompt.includes(part.replace('을(를) 위한', '').trim()))) specificity += 15
+  const detailKw = ['구체적으로', '상세히', '정확히', '명확히']
   specificity += detailKw.filter(kw => prompt.includes(kw)).length * 9
-  if (prompt.includes('\uC0AC\uC6A9\uC790') || prompt.includes('\uB300\uC0C1') || prompt.includes('\uACE0\uAC1D')) specificity += 10
-  if (prompt.includes('\uC0C1\uD669') || prompt.includes('\uC2DC\uB098\uB9AC\uC624') || prompt.includes('\uACBD\uC6B0')) specificity += 8
+  if (prompt.includes('사용자') || prompt.includes('대상') || prompt.includes('고객')) specificity += 10
+  if (prompt.includes('상황') || prompt.includes('시나리오') || prompt.includes('경우')) specificity += 8
 
-  const appealKw = ['\uD3B8\uB9AC', '\uAC04\uD3B8', '\uC26C\uC6B4', '\uBE60\uB978', '\uC989\uC2DC', '\uD55C\uBC88\uC5D0', '\uC790\uB3D9']
+  const appealKw = ['편리', '간편', '쉬운', '빠른', '즉시', '한번에', '자동']
   marketability += appealKw.filter(kw => prompt.includes(kw)).length * 10
-  if (prompt.includes('\uC0AC\uC6A9\uC790') || prompt.includes('\uACE0\uAC1D') || prompt.includes('\uC774\uC6A9\uC790')) marketability += 12
-  if (prompt.includes('\uACBD\uD5D8') || prompt.includes('\uB9CC\uC871') || prompt.includes('\uC990\uAC70\uC6C0')) marketability += 10
-  if (prompt.includes('\uBD88\uD3B8') || prompt.includes('\uC5B4\uB824\uC6C0') || prompt.includes('\uD798\uB4E0')) marketability += 12
-  if (prompt.includes('\uD574\uACB0') && (prompt.includes('\uBB38\uC81C') || prompt.includes('pain'))) marketability += 15
-  if (['\uACF5\uC720', '\uC18C\uC15C', '\uCEE4\uBBA4\uB2C8\uD2F0', '\uCE5C\uAD6C', '\uD568\uAED8', '\uC5F0\uACB0'].some(kw => prompt.includes(kw))) marketability += 12
-  if (prompt.includes('\uB204\uAD6C\uB098') || prompt.includes('\uC27D\uAC8C') || prompt.includes('\uAC04\uB2E8\uD788')) marketability += 10
-  if (['\uC990\uAC70\uC6B4', '\uC7AC\uBBF8', '\uAC10\uB3D9', '\uD589\uBCF5', '\uC704\uB85C', '\uACF5\uAC10'].some(kw => prompt.includes(kw))) marketability += 8
+  if (prompt.includes('사용자') || prompt.includes('고객') || prompt.includes('이용자')) marketability += 12
+  if (prompt.includes('경험') || prompt.includes('만족') || prompt.includes('즐거움')) marketability += 10
+  if (prompt.includes('불편') || prompt.includes('어려움') || prompt.includes('힘든')) marketability += 12
+  if (prompt.includes('해결') && (prompt.includes('문제') || prompt.includes('pain'))) marketability += 15
+  if (['공유', '소셜', '커뮤니티', '친구', '함께', '연결'].some(kw => prompt.includes(kw))) marketability += 12
 
-  const aiKw = ['AI', '\uC778\uACF5\uC9C0\uB2A5', '\uC0DD\uC131\uD615', 'GPT', '\uCC57\uBD07', '\uC790\uB3D9\uD654', '\uBA38\uC2E0\uB7EC\uB2DD', '\uD559\uC2B5']
+  const aiKw = ['AI', '인공지능', '생성형', 'GPT', '챗봇', '자동화', '머신러닝', '학습']
   trendAlignment += aiKw.filter(kw => prompt.includes(kw)).length * 12
-  const persoKw = ['\uAC1C\uC778\uD654', '\uB9DE\uCDA4', '\uCDE8\uD5A5', '\uCD94\uCC9C', '\uD050\uB808\uC774\uC158', '\uB098\uB9CC\uC758']
+  const persoKw = ['개인화', '맞춤', '취향', '추천', '큐레이션', '나만의']
   trendAlignment += persoKw.filter(kw => prompt.includes(kw)).length * 10
-  if (['\uCE5C\uD658\uACBD', '\uC9C0\uC18D\uAC00\uB2A5', '\uC7AC\uD65C\uC6A9', '\uC5D0\uCF54', '\uD0C4\uC18C', '\uADF8\uB9B0'].some(kw => prompt.includes(kw))) trendAlignment += 11
-  if (['\uC0DD\uC0B0\uC131', '\uD6A8\uC728', '\uC2DC\uAC04\uC808\uC57D', '\uAD00\uB9AC', '\uCD5C\uC801\uD654'].some(kw => prompt.includes(kw))) trendAlignment += 10
-  if (['\uBA58\uD0C8', '\uC815\uC2E0\uAC74\uAC15', '\uC6F0\uBE59', '\uBA85\uC0C1', '\uD790\uB9C1', '\uCF00\uC5B4', '\uAC74\uAC15'].some(kw => prompt.includes(kw))) trendAlignment += 9
-  if (['\uD50C\uB809\uC2A4', '\uAC00\uC131\uBE44', '\uAC00\uC2EC\uBE44', '\uC694\uC998', 'MBTI', '\uBBF8\uB2DD\uC544\uC6C3'].some(kw => prompt.includes(kw))) trendAlignment += 9
-  if (['\uBA54\uD0C0\uBC84\uC2A4', '\uAC00\uC0C1', 'VR', 'AR', '\uC544\uBC14\uD0C0', '\uB514\uC9C0\uD138'].some(kw => prompt.includes(kw))) trendAlignment += 8
-  if (['\uD06C\uB9AC\uC5D0\uC774\uD130', '\uCF58\uD150\uCE20', '\uCC3D\uC791', '\uC81C\uC791', '\uC778\uD50C\uB8E8\uC5B8\uC11C'].some(kw => prompt.includes(kw))) trendAlignment += 9
-  if (['\uC21F\uD3FC', '\uC9E7\uC740', '\uC694\uC57D', '\uD55C\uB208\uC5D0', '\uBE60\uB974\uAC8C', '\uAC04\uB2E8'].some(kw => prompt.includes(kw))) trendAlignment += 7
-  if (['\uB370\uC774\uD130', '\uBD84\uC11D', '\uD1B5\uACC4', '\uC778\uC0AC\uC774\uD2B8', '\uC9C0\uD45C'].some(kw => prompt.includes(kw))) trendAlignment += 8
+  if (['친환경', '지속가능', '재활용', '에코', '탄소', '그린'].some(kw => prompt.includes(kw))) trendAlignment += 11
+  if (['생산성', '효율', '시간절약', '관리', '최적화'].some(kw => prompt.includes(kw))) trendAlignment += 10
+  if (['데이터', '분석', '통계', '인사이트', '지표'].some(kw => prompt.includes(kw))) trendAlignment += 8
 
   creativity = Math.min(100, Math.max(0, creativity))
   feasibility = Math.min(100, Math.max(0, feasibility))
@@ -182,169 +191,113 @@ function evaluateIdea(prompt: string, topic: string): IdeaEvalResult {
   return { total, details: { creativity, feasibility, specificity, marketability, trendAlignment } }
 }
 
-interface PromptEvalResult {
-  total: number
-  details: {
-    roleClarity: number
-    structureQuality: number
-    outputSpecification: number
-  }
-}
-
-function evaluatePromptQuality(prompt: string): PromptEvalResult {
-  let roleClarity = 55
-  let structureQuality = 55
-  let outputSpecification = 55
-
-  const roleKw = ['\uC5ED\uD560', '\uB2F9\uC2E0\uC740', '\uC804\uBB38\uAC00', '\uB514\uC790\uC774\uB108', '\uAC1C\uBC1C\uC790', '\uAE30\uD68D\uC790', '\uCEE8\uC124\uD134\uD2B8']
-  if (roleKw.some(kw => prompt.includes(kw))) roleClarity += 25
-  const actionKw = ['\uD574\uC918', '\uB9CC\uB4E4\uC5B4', '\uC791\uC131', '\uC0DD\uC131', '\uBD84\uC11D', '\uCD94\uCC9C']
-  if (actionKw.some(kw => prompt.includes(kw))) roleClarity += 18
-
-  if (prompt.includes('\n') || prompt.includes('1.') || prompt.includes('-')) structureQuality += 22
-  if (prompt.includes('\uB2E8\uACC4') || prompt.includes('\uC808\uCC28') || prompt.includes('\uC21C\uC11C')) structureQuality += 18
-  const vagueKw = ['\uC880', '\uBB54\uAC00', '\uC774\uB7F0', '\uC800\uB7F0', '\uB300\uCDA9']
-  structureQuality -= vagueKw.filter(w => prompt.includes(w)).length * 8
-  if (prompt.length > 150) structureQuality += 15
-
-  const fmtKw = ['\uD615\uC2DD', '\uD3EC\uB9F7', '\uC591\uC2DD', '\uAD6C\uC870', '\uBAA9\uB85D', '\uD45C', '\uC815\uB9AC']
-  outputSpecification += fmtKw.filter(kw => prompt.includes(kw)).length * 12
-  if (prompt.includes('\uAD6C\uCCB4\uC801') || prompt.includes('\uC790\uC138\uD788') || prompt.includes('\uC0C1\uC138\uD788')) outputSpecification += 14
-  if (prompt.includes('\uC608\uC2DC') || prompt.includes('\uC0AC\uB840') || prompt.includes('\uC608\uB97C \uB4E4\uC5B4')) outputSpecification += 12
-  if (prompt.includes('\uC870\uAC74') || prompt.includes('\uC81C\uC57D') || prompt.includes('\uADDC\uCE59')) outputSpecification += 10
-  if (prompt.match(/\d+/)) outputSpecification += 10
-
-  roleClarity = Math.min(100, Math.max(0, roleClarity))
-  structureQuality = Math.min(100, Math.max(0, structureQuality))
-  outputSpecification = Math.min(100, Math.max(0, outputSpecification))
-
-  let total = Math.round((roleClarity + structureQuality + outputSpecification) / 3)
-  if (total < 90 && total >= 60) {
-    const bonus = Math.min(8, Math.round((90 - total) * 0.15))
-    total = Math.min(89, total + bonus)
-  }
-
-  return { total, details: { roleClarity, structureQuality, outputSpecification } }
-}
-
-function analyzeStrengthsWeaknesses(
-  ideaEval: IdeaEvalResult,
-  promptEval: PromptEvalResult,
+// ─── 강점/약점 생성 ───────────────────────────────────────────────
+function buildStrengthsWeaknesses(
+  ideaDetails: ReturnType<typeof scoreIdea>['details'],
+  promptDetails: ReturnType<typeof scorePromptQuality>['details'],
   prompt: string
 ): { strengths: string[]; weaknesses: string[] } {
-  const allS: { score: number; text: string }[] = []
-  const allW: { score: number; text: string }[] = []
+  const strengths: string[] = []
+  const weaknesses: string[] = []
 
-  if (ideaEval.details.creativity >= 70) allS.push({ score: ideaEval.details.creativity, text: '\uCC3D\uC758\uC801\uC774\uACE0 \uB3C5\uCC3D\uC801\uC778 \uC544\uC774\uB514\uC5B4 \uC811\uADFC' })
-  else if (ideaEval.details.creativity < 50) allW.push({ score: 100 - ideaEval.details.creativity, text: '\uC544\uC774\uB514\uC5B4\uC758 \uB3C5\uCC3D\uC131\uC774 \uBD80\uC871\uD569\uB2C8\uB2E4' })
+  if (ideaDetails.creativity >= 70) strengths.push('창의적이고 독창적인 아이디어 접근')
+  else if (ideaDetails.creativity < 50) weaknesses.push('아이디어의 독창성이 부족합니다')
 
-  if (ideaEval.details.feasibility >= 70) allS.push({ score: ideaEval.details.feasibility, text: '\uC2E4\uD604 \uAC00\uB2A5\uC131\uC774 \uB192\uC740 \uD604\uC2E4\uC801 \uC81C\uC548' })
-  else if (ideaEval.details.feasibility < 50) allW.push({ score: 100 - ideaEval.details.feasibility, text: '\uC2E4\uD589 \uAC00\uB2A5\uC131\uC744 \uB192\uC774\uB294 \uAD6C\uCCB4\uC801 \uBC29\uC548 \uD544\uC694' })
+  if (ideaDetails.feasibility >= 70) strengths.push('실현 가능성이 높은 현실적 제안')
+  else if (ideaDetails.feasibility < 50) weaknesses.push('실행 가능성을 높이는 구체적 방안 필요')
 
-  if (ideaEval.details.specificity >= 70) allS.push({ score: ideaEval.details.specificity, text: '\uAD6C\uCCB4\uC801\uC774\uACE0 \uBA85\uD655\uD55C \uBB38\uC81C \uC815\uC758' })
-  else if (ideaEval.details.specificity < 50) allW.push({ score: 100 - ideaEval.details.specificity, text: '\uC8FC\uC81C\uC5D0 \uB300\uD55C \uAD6C\uCCB4\uC131\uACFC \uC138\uBD80 \uC0AC\uD56D \uBCF4\uC644 \uD544\uC694' })
+  if (ideaDetails.specificity >= 70) strengths.push('구체적이고 명확한 문제 정의')
+  else if (ideaDetails.specificity < 50) weaknesses.push('주제에 대한 구체성과 세부 사항 보완 필요')
 
-  if (ideaEval.details.marketability >= 70) allS.push({ score: ideaEval.details.marketability, text: '\uC2DC\uC7A5\uC5D0\uC11C\uC758 \uC218\uC694\uC640 \uAD00\uB828\uC131\uC774 \uB192\uC74C' })
-  else if (ideaEval.details.marketability < 50) allW.push({ score: 100 - ideaEval.details.marketability, text: '\uC2DC\uC7A5\uC5D0\uC11C\uC758 \uC218\uC694\uC640 \uAD00\uB828\uC131\uC744 \uB192\uC774\uB294 \uBC29\uC548 \uD544\uC694' })
+  if (ideaDetails.marketability >= 70) strengths.push('시장에서의 수요와 관련성이 높음')
+  else if (ideaDetails.marketability < 50) weaknesses.push('시장에서의 수요와 관련성을 높이는 방안 필요')
 
-  if (ideaEval.details.trendAlignment >= 70) allS.push({ score: ideaEval.details.trendAlignment, text: '\uCD5C\uC2E0 \uD2B8\uB80C\uB4DC\uC640 \uC77C\uCE58\uD558\uB294 \uC544\uC774\uB514\uC5B4' })
-  else if (ideaEval.details.trendAlignment < 50) allW.push({ score: 100 - ideaEval.details.trendAlignment, text: '\uCD5C\uC2E0 \uD2B8\uB80C\uB4DC\uC640\uC758 \uC77C\uCE58\uC131\uC744 \uB192\uC774\uB294 \uBC29\uC548 \uD544\uC694' })
+  if (promptDetails.structureScore >= 10) strengths.push('체계적이고 논리적인 프롬프트 구조')
+  else if (promptDetails.structureScore < 5) weaknesses.push('프롬프트 구조와 논리성 개선 필요')
 
-  if (promptEval.details.roleClarity >= 70) allS.push({ score: promptEval.details.roleClarity, text: 'AI\uC758 \uC5ED\uD560\uACFC \uBAA9\uC801\uC774 \uBA85\uD655\uD558\uAC8C \uC815\uC758\uB428' })
-  else if (promptEval.details.roleClarity < 50) allW.push({ score: 100 - promptEval.details.roleClarity, text: 'AI\uC5D0\uAC8C \uC694\uAD6C\uD558\uB294 \uC5ED\uD560\uC744 \uB354 \uBA85\uD655\uD788 \uC81C\uC2DC\uD558\uC138\uC694' })
+  if (promptDetails.specificityScore >= 15) strengths.push('출력 형식과 조건이 구체적으로 명시됨')
+  else if (promptDetails.specificityScore < 5) weaknesses.push('원하는 출력 형식과 조건을 더 상세히 작성하세요')
 
-  if (promptEval.details.structureQuality >= 70) allS.push({ score: promptEval.details.structureQuality, text: '\uCCB4\uACC4\uC801\uC774\uACE0 \uB17C\uB9AC\uC801\uC778 \uD504\uB86C\uD504\uD2B8 \uAD6C\uC870' })
-  else if (promptEval.details.structureQuality < 50) allW.push({ score: 100 - promptEval.details.structureQuality, text: '\uD504\uB86C\uD504\uD2B8 \uAD6C\uC870\uC640 \uB17C\uB9AC\uC131 \uAC1C\uC120 \uD544\uC694' })
+  if (prompt.length > 200) strengths.push('충분한 분량으로 상세한 설명 제공')
 
-  if (promptEval.details.outputSpecification >= 70) allS.push({ score: promptEval.details.outputSpecification, text: '\uCD9C\uB825 \uD615\uC2DD\uACFC \uC870\uAC74\uC774 \uAD6C\uCCB4\uC801\uC73C\uB85C \uBA85\uC2DC\uB428' })
-  else if (promptEval.details.outputSpecification < 50) allW.push({ score: 100 - promptEval.details.outputSpecification, text: '\uC6D0\uD558\uB294 \uCD9C\uB825 \uD615\uC2DD\uACFC \uC870\uAC74\uC744 \uB354 \uC0C1\uC138\uD788 \uC791\uC131\uD558\uC138\uC694' })
+  while (strengths.length < 2) strengths.push(strengths.length === 0
+    ? '주제를 이해하고 접근하려는 시도가 보입니다'
+    : '프롬프트 작성에 대한 기본 이해가 있습니다')
+  while (weaknesses.length < 2) weaknesses.push(weaknesses.length === 0
+    ? '더 구체적인 설명을 추가하면 좋겠습니다'
+    : '실행 가능한 세부 방안을 보완해보세요')
 
-  if (prompt.length > 200) allS.push({ score: 75, text: '\uCDA9\uBD84\uD55C \uBD84\uB7C9\uC73C\uB85C \uC0C1\uC138\uD55C \uC124\uBA85 \uC81C\uACF5' })
-
-  allS.sort((a, b) => b.score - a.score)
-  allW.sort((a, b) => b.score - a.score)
-
-  const strengths = allS.slice(0, 2).map(s => s.text)
-  const weaknesses = allW.slice(0, 2).map(w => w.text)
-
-  while (strengths.length < 2) {
-    strengths.push(strengths.length === 0 ? '\uC8FC\uC81C\uB97C \uC774\uD574\uD558\uACE0 \uC811\uADFC\uD558\uB824\uB294 \uC2DC\uB3C4\uAC00 \uBCF4\uC785\uB2C8\uB2E4' : '\uD504\uB86C\uD504\uD2B8 \uC791\uC131\uC5D0 \uB300\uD55C \uAE30\uBCF8 \uC774\uD574\uAC00 \uC788\uC2B5\uB2C8\uB2E4')
-  }
-  while (weaknesses.length < 2) {
-    weaknesses.push(weaknesses.length === 0 ? '\uB354 \uAD6C\uCCB4\uC801\uC778 \uC124\uBA85\uC744 \uCD94\uAC00\uD558\uBA74 \uC88B\uACA0\uC2B5\uB2C8\uB2E4' : '\uC2E4\uD589 \uAC00\uB2A5\uD55C \uC138\uBD80 \uBC29\uC548\uC744 \uBCF4\uC644\uD574\uBCF4\uC138\uC694')
-  }
-
-  return { strengths, weaknesses }
+  return { strengths: strengths.slice(0, 2), weaknesses: weaknesses.slice(0, 2) }
 }
 
-function generateFeedback(ideaScore: number, promptScore: number, prompt: string): string {
-  const avgScore = (ideaScore + promptScore) / 2
+// ─── 개선된 프롬프트 생성 ─────────────────────────────────────────
+function buildImprovedPrompt(original: string): string {
+  const a = analyze(original)
   const parts: string[] = []
 
-  if (avgScore >= 80) {
-    parts.push('\uC804\uBC18\uC801\uC73C\uB85C \uB9E4\uC6B0 \uB192\uC740 \uC218\uC900\uC758 \uD504\uB86C\uD504\uD2B8\uC785\uB2C8\uB2E4.')
-  } else if (avgScore >= 65) {
-    parts.push('\uAE30\uBCF8\uAE30\uAC00 \uAC16\uCDB0\uC9C4 \uD504\uB86C\uD504\uD2B8\uC774\uB098, \uBA87 \uAC00\uC9C0 \uBCF4\uC644 \uD3EC\uC778\uD2B8\uAC00 \uC788\uC2B5\uB2C8\uB2E4.')
-  } else if (avgScore >= 50) {
-    parts.push('\uD575\uC2EC \uC544\uC774\uB514\uC5B4\uB294 \uC7A1\uC558\uC9C0\uB9CC, \uC804\uB2EC \uBC29\uC2DD\uC5D0\uC11C \uC544\uC26C\uC6C0\uC774 \uB0A8\uC2B5\uB2C8\uB2E4.')
-  } else {
-    parts.push('\uD504\uB86C\uD504\uD2B8\uC758 \uC804\uBC18\uC801\uC778 \uBC29\uD5A5\uACFC \uAD6C\uC870 \uBAA8\uB450 \uC7AC\uAC80\uD1A0\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.')
+  // 원문 기반 핵심 문장 (마지막 마침표 제거 후 사용)
+  let base = original.trim().replace(/[.。!！?？]+$/, '')
+
+  // 질문형이 아니면 설명 요청으로 변환
+  if (!a.isQuestion) {
+    base = `${base}에 대해 구체적으로 설명해 주세요`
+  }
+  parts.push(base + '.')
+
+  // 수치 미포함 → 수치 요청 추가
+  if (!a.hasNumber) {
+    parts.push('가능하다면 관련 수치나 통계도 포함해 주세요.')
   }
 
-  if (ideaScore >= 80) {
-    parts.push('\uC544\uC774\uB514\uC5B4 \uCE21\uBA74\uC5D0\uC11C\uB294 \uC8FC\uC81C\uB97C \uAE4A\uC774 \uC788\uAC8C \uD574\uC11D\uD558\uACE0 \uB3C5\uCC3D\uC801\uC778 \uC2DC\uAC01\uC744 \uBCF4\uC5EC\uC8FC\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uBB38\uC81C \uC815\uC758\uBD80\uD130 \uD574\uACB0 \uBC29\uD5A5\uAE4C\uC9C0 \uB17C\uB9AC\uC801\uC73C\uB85C \uC5F0\uACB0\uB418\uC5B4 \uC788\uC5B4 \uC2E4\uC81C \uC11C\uBE44\uC2A4\uD654\uD588\uC744 \uB54C\uB3C4 \uACBD\uC7C1\uB825\uC774 \uC788\uC744 \uAC83\uC73C\uB85C \uBCF4\uC785\uB2C8\uB2E4.')
-  } else if (ideaScore >= 65) {
-    if (prompt.includes('\uBB38\uC81C') || prompt.includes('\uD574\uACB0')) {
-      parts.push('\uBB38\uC81C \uC778\uC2DD\uC740 \uB69C\uB837\uD558\uB098, \uD574\uACB0 \uBC29\uC548\uC774 \uC880 \uB354 \uAD6C\uCCB4\uC801\uC774\uBA74 \uC88B\uACA0\uC2B5\uB2C8\uB2E4. \uC544\uC774\uB514\uC5B4\uAC00 \uC2E4\uC81C\uB85C \uAD6C\uD604\uB418\uC5C8\uC744 \uB54C \uC0AC\uC6A9\uC790\uAC00 \uC5B4\uB5A4 \uAC00\uCE58\uB97C \uB290\uB084\uC9C0\uC5D0 \uB300\uD55C \uC124\uBA85\uC744 \uCD94\uAC00\uD558\uBA74 \uC124\uB4DD\uB825\uC774 \uD06C\uAC8C \uC62C\uB77C\uAC08 \uAC83\uC785\uB2C8\uB2E4.')
-    } else {
-      parts.push('\uC544\uC774\uB514\uC5B4\uC5D0 \uC7A0\uC7AC\uB825\uC774 \uC788\uC9C0\uB9CC, "\uC65C \uC774\uAC83\uC774 \uD544\uC694\uD55C\uAC00"\uC5D0 \uB300\uD55C \uADFC\uAC70\uAC00 \uBD80\uC871\uD569\uB2C8\uB2E4. \uB300\uC0C1 \uC0AC\uC6A9\uC790\uC758 \uBD88\uD3B8\uD568\uC774\uB098 \uB2C8\uC988\uB97C \uBA3C\uC800 \uC815\uC758\uD558\uACE0, \uADF8\uAC83\uC744 \uC5B4\uB5BB\uAC8C \uD574\uACB0\uD558\uB294\uC9C0 \uD750\uB984\uC744 \uC7A1\uC544\uBCF4\uC138\uC694.')
-    }
-  } else if (ideaScore >= 50) {
-    parts.push('\uC544\uC774\uB514\uC5B4\uAC00 \uB2E4\uC18C \uC77C\uBC18\uC801\uC778 \uC218\uC900\uC5D0 \uBA38\uBB3C\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uBE44\uC2B7\uD55C \uC11C\uBE44\uC2A4\uB098 \uC194\uB8E8\uC158\uC774 \uC774\uBBF8 \uC874\uC7AC\uD558\uB294\uC9C0 \uCC28\uBCC4\uC810\uC740 \uBB34\uC5C7\uC778\uC9C0 \uACE0\uBBFC\uD574\uBCF4\uC138\uC694. "\uAE30\uC874\uC5D0 \uC5C6\uB294 \uAC00\uCE58"\uB97C \uD55C \uC904\uB85C \uC124\uBA85\uD560 \uC218 \uC788\uB2E4\uBA74 \uC88B\uC740 \uC544\uC774\uB514\uC5B4\uC758 \uCCAB\uAC78\uC74C\uC785\uB2C8\uB2E4.')
-  } else {
-    parts.push('\uC544\uC774\uB514\uC5B4\uAC00 \uC8FC\uC81C\uC640\uC758 \uC5F0\uACB0\uC131\uC774 \uC57D\uD558\uAC70\uB098, \uCD94\uC0C1\uC801\uC778 \uB2E8\uC5B4 \uB098\uC5F4\uC5D0 \uADF8\uCE58\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uC8FC\uC81C\uC758 \uD575\uC2EC \uD0A4\uC6CC\uB4DC\uB97C \uB2E4\uC2DC \uC77D\uACE0, "\uB204\uAD6C\uC5D0\uAC8C", "\uC5B4\uB5A4 \uC0C1\uD669\uC5D0\uC11C", "\uBB34\uC2A8 \uBB38\uC81C\uB97C" \uD574\uACB0\uD558\uB294\uC9C0 \uAD6C\uCCB4\uC801\uC73C\uB85C \uC368\uBCF4\uC138\uC694.')
+  // 목적 없음 → 목적 문장 추가
+  if (!a.hasPurpose) {
+    parts.push('이 정보를 실제로 활용할 수 있는 목적과 맥락도 함께 고려해 주세요.')
   }
 
-  if (promptScore >= 80) {
-    parts.push('\uD504\uB86C\uD504\uD2B8 \uAD6C\uC870\uB3C4 \uC6B0\uC218\uD569\uB2C8\uB2E4. AI\uC5D0\uAC8C \uC5ED\uD560\uC744 \uBD80\uC5EC\uD558\uACE0, \uB2E8\uACC4\uBCC4\uB85C \uC9C0\uC2DC\uD558\uBA70, \uCD9C\uB825 \uD615\uC2DD\uAE4C\uC9C0 \uBA85\uC2DC\uD55C \uC810\uC774 \uC778\uC0C1\uC801\uC785\uB2C8\uB2E4. \uC774 \uC218\uC900\uC774\uBA74 \uC2E4\uC81C GPT\uC5D0 \uC785\uB825\uD574\uB3C4 \uBC14\uB85C \uC591\uC9C8\uC758 \uACB0\uACFC\uB97C \uAE30\uB300\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.')
-  } else if (promptScore >= 65) {
-    const hasRole = prompt.includes('\uC5ED\uD560') || prompt.includes('\uB2F9\uC2E0\uC740') || prompt.includes('\uC804\uBB38\uAC00')
-    const hasFormat = prompt.includes('\uD615\uC2DD') || prompt.includes('\uD3EC\uB9F7') || prompt.includes('\uBAA9\uB85D') || prompt.includes('\uD45C')
-    if (!hasRole && !hasFormat) {
-      parts.push('\uD504\uB86C\uD504\uD2B8 \uAD6C\uC870\uC5D0\uC11C \uAC00\uC7A5 \uC544\uC26C\uC6B4 \uC810\uC740 AI\uC758 \uC5ED\uD560 \uC124\uC815\uACFC \uCD9C\uB825 \uD615\uC2DD\uC774 \uBE60\uC838\uC788\uB2E4\uB294 \uAC83\uC785\uB2C8\uB2E4. "\uB2F9\uC2E0\uC740 ~\uBD84\uC57C \uC804\uBB38\uAC00\uC785\uB2C8\uB2E4"\uB85C \uC2DC\uC791\uD558\uACE0, "~\uD615\uC2DD\uC73C\uB85C \uC815\uB9AC\uD574\uC918"\uB77C\uACE0 \uB9C8\uBB34\uB9AC\uD558\uBA74 \uACB0\uACFC\uC758 \uC9C8\uC774 \uD06C\uAC8C \uB2EC\uB77C\uC9D1\uB2C8\uB2E4.')
-    } else if (!hasRole) {
-      parts.push('\uCD9C\uB825 \uC870\uAC74\uC740 \uC5B4\uB290 \uC815\uB3C4 \uAC16\uCDB0\uC5C8\uC73C\uB098, AI\uC5D0\uAC8C \uC5B4\uB5A4 \uAD00\uC810\uC5D0\uC11C \uB2F5\uD574\uC57C \uD558\uB294\uC9C0 \uC5ED\uD560\uC744 \uBD80\uC5EC\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4. "\uB2F9\uC2E0\uC740 ~\uC785\uB2C8\uB2E4" \uD55C \uBB38\uC7A5\uB9CC \uCD94\uAC00\uD574\uB3C4 AI\uC758 \uB2F5\uBCC0 \uD1A4\uACFC \uAE4A\uC774\uAC00 \uC644\uC804\uD788 \uB2EC\uB77C\uC9D1\uB2C8\uB2E4.')
-    } else if (!hasFormat) {
-      parts.push('\uC5ED\uD560 \uC124\uC815\uC740 \uC798 \uB418\uC5B4\uC788\uC73C\uB098, AI\uAC00 \uC5B4\uB5A4 \uD615\uD0DC\uB85C \uACB0\uACFC\uBB3C\uC744 \uB9CC\uB4E4\uC5B4\uC57C \uD558\uB294\uC9C0 \uBD88\uBA85\uD655\uD569\uB2C8\uB2E4. "\uD45C\uB85C \uC815\uB9AC\uD574\uC918", "3\uAC00\uC9C0 \uC635\uC158\uC73C\uB85C \uC81C\uC2DC\uD574\uC918" \uAC19\uC740 \uCD9C\uB825 \uD615\uC2DD \uC9C0\uC815\uC744 \uCD94\uAC00\uD574\uBCF4\uC138\uC694.')
-    } else {
-      parts.push('\uD504\uB86C\uD504\uD2B8 \uC791\uC131 \uAE30\uC220\uC774 \uC591\uD638\uD569\uB2C8\uB2E4. \uB2E4\uB9CC \uC870\uAC74\uC774\uB098 \uC81C\uC57D\uC0AC\uD56D\uC744 \uCD94\uAC00\uD558\uBA74 AI\uAC00 \uB354 \uC815\uD655\uD55C \uACB0\uACFC\uB97C \uB9CC\uB4E4\uC5B4\uB0BC \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC608\uB97C \uB4E4\uC5B4 "~\uB294 \uC81C\uC678\uD558\uACE0", "~\uB97C \uBC18\uB4DC\uC2DC \uD3EC\uD568\uD574\uC11C" \uAC19\uC740 \uAD6C\uCCB4\uC801 \uC870\uAC74\uC744 \uB123\uC5B4\uBCF4\uC138\uC694.')
-    }
-  } else if (promptScore >= 50) {
-    parts.push('\uD504\uB86C\uD504\uD2B8\uAC00 "~\uD574\uC918"\uB77C\uB294 \uB2E8\uC21C \uC694\uCCAD \uC218\uC900\uC5D0 \uAC00\uAE5D\uC2B5\uB2C8\uB2E4. \uC88B\uC740 \uD504\uB86C\uD504\uD2B8\uB294 \uC138 \uAC00\uC9C0\uB97C \uAC16\uCDB0\uC57C \uD569\uB2C8\uB2E4: (1) AI\uC758 \uC5ED\uD560/\uAD00\uC810 \uC124\uC815, (2) \uB2E8\uACC4\uBCC4 \uC9C0\uC2DC\uC0AC\uD56D, (3) \uC6D0\uD558\uB294 \uCD9C\uB825\uC758 \uD615\uC2DD\uACFC \uC870\uAC74. \uC774 \uC138 \uAC00\uC9C0\uB97C \uC758\uC2DD\uD558\uBA70 \uB2E4\uC2DC \uC791\uC131\uD574\uBCF4\uC138\uC694.')
-  } else {
-    parts.push('\uD504\uB86C\uD504\uD2B8\uAC00 \uB108\uBB34 \uC9E7\uAC70\uB098 \uBAA8\uD638\uD558\uC5EC AI\uAC00 \uC758\uB3C4\uB97C \uD30C\uC545\uD558\uAE30 \uC5B4\uB835\uC2B5\uB2C8\uB2E4. \uCD5C\uC18C\uD55C "\uB204\uAD6C(\uC5ED\uD560)"\uC5D0\uAC8C "\uBB34\uC5C7(\uACFC\uC81C)"\uC744 "\uC5B4\uB5BB\uAC8C(\uD615\uC2DD)" \uD574\uB2EC\uB77C\uB294 \uC138 \uC694\uC18C\uB97C \uB2F4\uC544\uC57C \uD569\uB2C8\uB2E4. \uD55C \uC904\uC9DC\uB9AC \uC9C8\uBB38\uBCF4\uB2E4\uB294 \uB9E5\uB77D\uACFC \uC870\uAC74\uC744 \uD568\uAED8 \uC81C\uC2DC\uD574\uBCF4\uC138\uC694.')
+  // 조건 없음 → 조건 추가
+  if (!a.hasCondition) {
+    parts.push('특정 조건이나 상황별 차이가 있다면 구분하여 설명해 주세요.')
   }
 
-  const gap = Math.abs(ideaScore - promptScore)
-  if (gap >= 20) {
-    if (ideaScore > promptScore) {
-      parts.push('[Tip] \uC544\uC774\uB514\uC5B4 \uAC10\uAC01\uC740 \uB6F0\uC5B4\uB098\uB2C8, \uD504\uB86C\uD504\uD2B8 \uC5D4\uC9C0\uB2C8\uC5B4\uB9C1 \uAE30\uBC95(\uC5ED\uD560 \uBD80\uC5EC, \uB2E8\uACC4 \uBD84\uB9AC, \uCD9C\uB825 \uD615\uC2DD \uC9C0\uC815)\uC744 \uC5F0\uC2B5\uD558\uBA74 \uC810\uC218\uAC00 \uD06C\uAC8C \uC624\uB97C \uC218 \uC788\uC2B5\uB2C8\uB2E4.')
-    } else {
-      parts.push('[Tip] \uD504\uB86C\uD504\uD2B8 \uC791\uC131 \uAE30\uC220\uC740 \uC88B\uC73C\uB2C8, \uC8FC\uC81C\uB97C \uB354 \uAE4A\uC774 \uBD84\uC11D\uD558\uACE0 \uCC28\uBCC4\uD654\uB41C \uC544\uC774\uB514\uC5B4\uB97C \uAD6C\uC0C1\uD558\uB294 \uB370 \uC2DC\uAC04\uC744 \uD22C\uC790\uD574\uBCF4\uC138\uC694.')
-    }
-  } else if (avgScore < 65) {
-    parts.push('[Tip] \uB2E4\uC74C \uB77C\uC6B4\uB4DC\uC5D0\uC11C\uB294 \uD504\uB86C\uD504\uD2B8\uB97C \uC4F0\uAE30 \uC804\uC5D0 30\uCD08\uB9CC "\uC774 \uC8FC\uC81C\uC758 \uD575\uC2EC \uBB38\uC81C\uAC00 \uBB58\uAE4C?"\uB97C \uBA3C\uC800 \uC0DD\uAC01\uD574\uBCF4\uC138\uC694. \uADF8 \uD55C \uBB38\uC7A5\uC774 \uC804\uCCB4 \uD504\uB86C\uD504\uD2B8\uC758 \uBC29\uD5A5\uC744 \uC7A1\uC544\uC90D\uB2C8\uB2E4.')
-  } else if (avgScore >= 80) {
-    const hasExample = prompt.includes('\uC608\uC2DC') || prompt.includes('\uC0AC\uB840') || prompt.includes('\uC608\uB97C \uB4E4\uC5B4')
-    const hasNeg = prompt.includes('\uC81C\uC678') || prompt.includes('\uD53C\uD574') || prompt.includes('\uC54A\uB3C4\uB85D')
-    if (!hasExample) {
-      parts.push('[Tip] \uC774\uBBF8 \uD6CC\uB96D\uD558\uC9C0\uB9CC, \uAD6C\uCCB4\uC801\uC778 \uC608\uC2DC("\uC608\uB97C \uB4E4\uC5B4 ~\uC640 \uAC19\uC740")\uB97C 1-2\uAC1C \uCD94\uAC00\uD558\uBA74 AI\uAC00 \uC758\uB3C4\uB97C \uB354 \uC815\uD655\uD788 \uD30C\uC545\uD569\uB2C8\uB2E4.')
-    } else if (!hasNeg) {
-      parts.push('[Tip] \uAC70\uC758 \uC644\uBCBD\uC5D0 \uAC00\uAE4C\uC6B4 \uD504\uB86C\uD504\uD2B8\uC785\uB2C8\uB2E4. "~\uB294 \uC81C\uC678\uD574\uC918"\uCC98\uB7FC \uB124\uAC70\uD2F0\uBE0C \uC870\uAC74\uC744 \uCD94\uAC00\uD558\uBA74 \uBD88\uD544\uC694\uD55C \uACB0\uACFC\uB97C \uC0AC\uC804\uC5D0 \uAC78\uB7EC\uB0BC \uC218 \uC788\uC2B5\uB2C8\uB2E4.')
-    } else {
-      parts.push('[Tip] \uB9E4\uC6B0 \uC644\uC131\uB3C4 \uB192\uC740 \uD504\uB86C\uD504\uD2B8\uC785\uB2C8\uB2E4. \uB9C8\uC9C0\uB9C9\uC73C\uB85C "\uACB0\uACFC\uB97C \uC790\uAE30 \uAC80\uC99D\uD558\uACE0 \uBD80\uC871\uD55C \uBD80\uBD84\uC744 \uBCF4\uC644\uD574\uC918"\uB77C\uB294 \uBA54\uD0C0 \uC9C0\uC2DC\uB97C \uCD94\uAC00\uD574\uBCF4\uC138\uC694.')
+  // 너무 짧음 → 출력 형식 요청
+  if (a.wordCount < 10) {
+    parts.push('핵심 요소를 단계별로 정리하고, 예시도 포함해 주세요.')
+  }
+
+  // 연결어 없음 → 논리 구조 요청
+  if (a.connectorCount === 0) {
+    parts.push('원인과 결과를 논리적으로 연결하여 설명해 주세요.')
+  }
+
+  return parts.join('\n')
+}
+
+// ─── 메인 평가 함수 ───────────────────────────────────────────────
+export function evaluatePrompt(prompt: string, topic: string): EvaluationResult {
+  if (isInvalidPrompt(prompt)) {
+    return {
+      ideaScore: 0,
+      promptScore: 0,
+      improvedPrompt: '유효한 프롬프트를 입력해 주세요.',
+      ideaDetails: { creativity: 0, feasibility: 0, specificity: 0, marketability: 0, trendAlignment: 0 },
+      promptDetails: { structureScore: 0, lengthScore: 0, specificityScore: 0, logicScore: 0, repetitionPenalty: 0 },
+      strengths: ['프롬프트 작성에 도전해보세요', '기본 아이디어를 정리해보세요'],
+      weaknesses: ['5자 이상의 의미 있는 문장을 작성해주세요', '구체적인 주제를 포함해주세요'],
     }
   }
 
-  return parts.join(' ')
+  const ideaEval = scoreIdea(prompt, topic)
+  const promptEval = scorePromptQuality(prompt)
+  const sw = buildStrengthsWeaknesses(ideaEval.details, promptEval.details, prompt)
+  const improvedPrompt = buildImprovedPrompt(prompt)
+
+  return {
+    ideaScore: Math.min(100, Math.max(0, ideaEval.total)),
+    promptScore: Math.min(100, Math.max(0, promptEval.total)),
+    improvedPrompt,
+    ideaDetails: ideaEval.details,
+    promptDetails: promptEval.details,
+    strengths: sw.strengths,
+    weaknesses: sw.weaknesses,
+  }
 }
