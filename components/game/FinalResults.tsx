@@ -361,8 +361,8 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 py-12">
+      <div ref={captureRef} className="max-w-2xl w-full">
       <motion.div
-        ref={captureRef}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="max-w-2xl w-full"
@@ -675,7 +675,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
                 ) : (
                   <>
                     <Download className="w-5 h-5" />
-                    <span>공유용 이미지 저��하기</span>
+                    <span>공유용 이미지 저장하기</span>
                   </>
                 )}
               </motion.button>
@@ -710,6 +710,7 @@ export function FinalResults({ roundData, sessionId, phoneNumber, onRestart }: F
           </motion.div>
         )}
       </motion.div>
+      </div>
     </div>
   )
 }
