@@ -1,31 +1,30 @@
 
-// ─── 타입 ─────────────────────────────────────────────────────────
-interface PromptDetails {
-  // ━━ A. 기능 완성도 (0–25) ━━
-  funcCompleteness: number   // A 합계
-  funcA1: number             // A-1 핵심 사용자 여정 커버리지 0–5
-  funcA2: number             // A-2 핵심 기능 세트 충족도 0–5
-  funcA3: number             // A-3 기능 간 의존성 설계 0–5
-  funcA4: number             // A-4 실제 사용 지속 가능성 0–5
-  funcA5: number             // A-5 MVP 절단 가능성 0–5
-  // ━━ B. 구체성 수준 (0–25) ━━
-  specificityScore: number   // B 합계
-  specB1: number             // B-1 입력 정의 명확도 0–5
-  specB2: number             // B-2 출력/결과 명확도 0–5
-  specB3: number             // B-3 상태 변화 정의 0–5
-  specB4: number             // B-4 조건 및 규칙 명시도 0–5
-  specB5: number             // B-5 측정 가능 요소 포함도 0–5
-  // ━━ 기존 보조 지표 ━━
-  reqClarity: number         // ① 요구 명확도 0–15
-  infoSufficiency: number    // ② 정보 충분성 0–20
-  funcSpec: number           // ③ 기능 요구사항 명확도 0–20 (내부 보조용)
-  interpStability: number    // ⑤ 해석 안정성 0–10
-  executability: number      // ⑥ 실행 가능성 0–15
-  structureOrg: number       // ⑦ 구조 조직력 0–10
-  intentConsist: number      // ⑧ 코칭 반응성 0–10
-  bonus: number              // ⑨ 보정치 −5~+10
-  // ━━ Ultra Strict 감점 ━━
-  ultraPenalty: number       // 강제 감점 합계 (음수)
+// ─── 타입 (game-types.ts 의 RoundData.promptDetails 와 완전 일치) ──
+export interface PromptDetails {
+  // A. 기능 완성도 (0–25)
+  funcCompleteness: number
+  funcA1: number
+  funcA2: number
+  funcA3: number
+  funcA4: number
+  funcA5: number
+  // B. 구체성 수준 (0–25)
+  specificityScore: number
+  specB1: number
+  specB2: number
+  specB3: number
+  specB4: number
+  specB5: number
+  // 보조 지표
+  reqClarity: number
+  infoSufficiency: number
+  funcSpec: number
+  interpStability: number
+  executability: number
+  structureOrg: number
+  intentConsist: number
+  bonus: number
+  ultraPenalty: number
 }
 
 interface EvaluationResult {
@@ -961,12 +960,12 @@ function checkStage0Gate(text: string): Stage0Result {
 
   // Q5. 최소 1개 이상의 구체 기능이 존재하는가?
   // 단순히 "만들어줘" 수준이 아닌 기능 단위가 식별 가능해야 함
-  const hasFuncKeyword = /(?:기능|화면|페이지|메뉴|버튼|탭|섹션|모듈|서비스|앱|시스템|플랫폼|게시판|댓글|회원|프로필|대시보드|관리|통계|보고|피드|리뷰|채팅|결제|배송|예약|알림|설정|검색|필터|추천|분석|API|인터페이스)/i.test(t)
+  const hasFuncKeyword = /(?:기능|화면|페이지|메뉴|버튼|탭|섹션|모듈|서비스|앱|시스템|플랫폼|게시판|댓글|회원|프로필|대��보드|관리|통계|보고|피드|리뷰|채팅|결제|배송|예약|알림|설정|검색|필터|추천|분석|API|인터페이스)/i.test(t)
   const hasActionableTask = /(?:작성|분석|비교|생성|만들|설계|구현|요약|정리|추천|설명|조사|평가|기획|개발|계획|제안|작성해|분석해|만들어|설계해|구현해|개발해|기획해)/i.test(t)
   const q5 = hasFuncKeyword || hasActionableTask
   if (!q5) failedQuestions.push('구체적인 기능이나 작업 대상이 전혀 식별되지 않습니다.')
 
-  if (!q4) failedQuestions.push('실행 조건이 명시되어 있지 않습니다. (가점 요소)')
+  if (!q4) failedQuestions.push('실행 조건이 명시되어 있지 않습니다. (가��� 요소)')
 
   const passedCount = [q1, q2, q3, q4, q5].filter(Boolean).length
 
